@@ -1,0 +1,23 @@
+update_value:
+  name: Update value
+  description: Update meter readings
+  target:
+    entity:
+      integration: pesc
+      domain: sensor
+      supported_features:
+        # don't know how to pass custom_component flag. Use with same value from climate.
+        # - pesc.const.PescEntityFeature.MANUAL
+        - climate.ClimateEntityFeature.TARGET_TEMPERATURE
+
+  fields:
+    value:
+      name: Value
+      description: The new meter readings to set
+      example: "12345"
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 999999
+          unit_of_measurement: kWh

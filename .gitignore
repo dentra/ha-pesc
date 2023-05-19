@@ -1,0 +1,9 @@
+.DS_Store
+*.pyc
+/.vscode
+
+/ha_storage
+/hass
+/main.py
+/test.html
+/configuration.yaml

@@ -1,0 +1,73 @@
+{
+  "dockerFile": "Dockerfile",
+  "build": {
+    "args": {
+      // HomeAssistant version
+      "ha_version": "2023.5.2",
+      // additional APT dependicies
+      "apt_deps": "bash-completion less",
+      // additional PIP dependicies
+      "pip_deps": "beautifulsoup4"
+    }
+  },
+  // "runArgs": ["--name","vscode-${containerWorkspaceFolderBasename}"],
+  // "runArgs": ["--env-file", "${localWorkspaceFolder}/test/.env"]
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.homeassistant",
+  "forwardPorts": [
+    8123
+  ],
+  "mounts": [
+    "source=vscode-${containerWorkspaceFolderBasename},target=/home/vscode/.homeassistant,type=volume",
+    "source=${localWorkspaceFolder}/configuration.yaml,target=/home/vscode/.homeassistant/configuration.yaml,type=bind",
+    "source=${localWorkspaceFolder}/custom_components,target=/home/vscode/.homeassistant/custom_components,type=bind"
+  ],
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "diffEditor.ignoreTrimWhitespace": true,
+        "files.autoSave": "onFocusChange",
+        "files.trimTrailingWhitespace": true,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "editor.formatOnPaste": false,
+        "python.pythonPath": "/srv/homeassistant/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.linting.flake8Enabled": false,
+        "python.linting.pylintArgs": [
+          "--init-hook",
+          "import sys; sys.path.append('/srv/homeassistant/lib/python3.10/site-packages/')"
+        ],
+        "python.languageServer": "Pylance",
+        "python.formatting.provider": "black",
+        "files.exclude": {
+          "**/.git": true,
+          "**/.DS_Store": true,
+          "**/*.pyc": {
+            "when": "$(basename).py"
+          },
+          "**/__pycache__": true
+        },
+        "files.associations": {
+          "**/.vscode/*.json": "jsonc"
+        }
+      },
+      // Add the IDs of extensions you want installed when the container is created.
+      "extensions": [
+        // python
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.isort",
+        "visualstudioexptteam.vscodeintellicode",
+        // yaml
+        "redhat.vscode-yaml",
+        // editorconfig
+        "editorconfig.editorconfig",
+        // fixme and todo tree
+        "Gruntfuggly.todo-tree"
+      ]
+    }
+  }
+}

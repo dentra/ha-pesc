@@ -1,0 +1,41 @@
+{
+    "title": "ПетроЭлектросСбыт",
+    "name": "ПЭС",
+    "config": {
+        "title": "Новое подключение ПетроЭлектросСбыт",
+        "error": {
+            "cant_connect": "Ошибка подключения к серверу",
+            "invalid_username": "Неверное имя пользователя",
+            "invalid_password": "Неверный пароль",
+            "api_error": "Ошибка API"
+        },
+        "abort": {
+            "already_configured": "Такой аккаунт уже существует"
+        },
+        "step": {
+            "user": {
+                "title": "Данные подключения",
+                "data": {
+                    "username": "Номер телефона",
+                    "password": "Пароль"
+                },
+                "description": "Введите учетные данные"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "update_interval": "Интервал обновления",
+                    "diagnostic_sensors": "Сенсоры в диагностическом режиме"
+                }
+            }
+        }
+    },
+    "services": {
+        "update_value": {
+            "name": "Передать показания"
+        }
+    }
+}

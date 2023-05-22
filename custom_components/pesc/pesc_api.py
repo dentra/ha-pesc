@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Final
 from datetime import datetime
+import asyncio
 
 from homeassistant.util import slugify
 
@@ -163,33 +164,41 @@ class PescApi:
         self._groups.clear()
         self._tariffs.clear()
 
+        accounts = await self.client.async_accounts()
+        await asyncio.gather(*(self._load_account(account) for account in accounts))
+
+    async def _load_account(self, account: pesc_client.Account):
+        acc = Account(account)
+        await asyncio.gather(
+            self._load_meters(acc),
+            self._load_tariffs(acc),
+        )
+
+    async def _load_meters(self, acc: Account):
+        meters = await self.client.async_meters(acc.id)
+        for meter in meters:
+            met = Meter(meter)
+            for met_ind in meter["indications"]:
+                ind = MeterInd(acc, met, met_ind)
+                self._meters.append(ind)
+                _LOGGER.debug("Load %s", ind)
+
+    async def _load_tariffs(self, acc: Account):
         def find_val(json_list, key) -> str:
             for json in json_list:
                 if json["name"] == key:
                     return json["value"]
             return None
 
-        accounts = await self.client.async_accounts()
-        for account in accounts:
-            acc = Account(account)
-            meters = await self.client.async_meters(acc.id)
-            for meter in meters:
-                met = Meter(meter)
-                for met_ind in meter["indications"]:
-                    ind = MeterInd(acc, met, met_ind)
-                    self._meters.append(ind)
-                    _LOGGER.debug("Load %s", ind)
-            for detail in await self.client.async_details(acc.id):
-                if detail["header"] == "Электроэнергия":
-                    content = detail["content"]
-                    tariff = Tariff(
-                        find_val(content, "Тариф"),
-                        list(
-                            map(float, find_val(content, "Тарифная ставка").split("/"))
-                        ),
-                    )
-                    self._tariffs[acc.id] = tariff
-                    _LOGGER.debug("Load %s", ind)
+        for detail in await self.client.async_details(acc.id):
+            if detail["header"] == "Электроэнергия":
+                content = detail["content"]
+                tariff = Tariff(
+                    find_val(content, "Тариф"),
+                    list(map(float, find_val(content, "Тарифная ставка").split("/"))),
+                )
+                self._tariffs[acc.id] = tariff
+                _LOGGER.debug("Load %s", tariff)
 
     async def async_fetch_groups(self) -> None:
         _LOGGER.debug("Fetch groups")

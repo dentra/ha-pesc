@@ -78,14 +78,10 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             self.update_interval = cv.time_period(entry.options[CONF_UPDATE_INTERVAL])
 
     async def _async_update_data(self):
-        # FIXME remove testing
-        # if self.update_interval.total_seconds() == 11:
-        #     raise ConfigEntryAuthFailed()
-
         try:
             # asyncio.TimeoutError and aiohttp.ClientError are already
             # handled by the data update coordinator.
-            async with async_timeout.timeout(10):
+            async with async_timeout.timeout(60):
                 return await self.api.async_fetch_all()
         except pesc_client.ClientAuthError as err:
             # Raising ConfigEntryAuthFailed will cancel future updates

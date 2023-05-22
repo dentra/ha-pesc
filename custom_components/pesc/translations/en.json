@@ -28,7 +28,8 @@
             "init": {
                 "data": {
                     "update_interval": "Update interval",
-                    "diagnostic_sensors": "Sensors in diagnostic mode"
+                    "diagnostic_sensors": "Sensors in diagnostic mode",
+                    "rates_sensors": "Additional rates sensors"
                 }
             }
         }

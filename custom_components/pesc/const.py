@@ -13,6 +13,7 @@ CONF_PASSWORD: Final = "password"
 CONF_VALUE: Final = "value"
 CONF_UPDATE_INTERVAL: Final = "update_interval"
 CONF_DIAGNOSTIC_SENSORS: Final = "diagnostic_sensors"
+CONF_RATES_SENSORS: Final = "rates_sensors"
 
 DEFAULT_UPDATE_INTERVAL: Final = datetime.timedelta(hours=12)
 

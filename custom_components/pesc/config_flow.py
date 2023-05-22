@@ -182,6 +182,10 @@ async def general_options_schema(
                 selector.DurationSelectorConfig(enable_day=True),
             ),
             vol.Optional(
+                const.CONF_RATES_SENSORS,
+                default=handler.options.get(const.CONF_RATES_SENSORS, False),
+            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+            vol.Optional(
                 const.CONF_DIAGNOSTIC_SENSORS,
                 default=handler.options.get(const.CONF_DIAGNOSTIC_SENSORS, False),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),

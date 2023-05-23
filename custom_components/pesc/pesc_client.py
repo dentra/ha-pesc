@@ -144,9 +144,10 @@ class PescClient:
 
     async def _async_get(self, url: str):
         url = f"{self._API_URL}{url}"
+        _LOGGER.debug("get %s: %s", url, self._headers)
         result = await self._session.get(url, headers=self._headers)
         json = await self._async_response_json(result)
-        _LOGGER.debug("get %s\n%s", url, json)
+        _LOGGER.debug("res %s", json)
         return json
 
     async def async_login(self, username: str, password: str) -> str:
@@ -258,11 +259,23 @@ class ClientError(exceptions.HomeAssistantError):
     def message(self):
         return self.json["message"]
 
+    @property
+    def cause(self) -> str | None:
+        return self.json.get("cause")
+
     def __repr__(self) -> str:
-        return (
-            self.__class__.__name__
-            + f"[url={self.request_info.url}, code={self.code}, message={self.message}]"
-        )
+        res = self.__class__.__name__
+        res += "["
+        res += f"url={self.request_info.url}"
+        res += f", code={self.code}"
+        res += f", message={self.message}"
+        if self.cause is not None:
+            res += f", cause={self.cause}"
+        res += "]"
+        return res
+
+    def __str__(self) -> str:
+        return self.message
 
 
 class ClientAuthError(ClientError):

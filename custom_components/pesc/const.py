@@ -4,6 +4,7 @@ from typing import Final
 from enum import IntFlag
 
 DOMAIN: Final = "pesc"
+DEFAULT_NAME: Final = "ПетроЭлектроСбыт"
 CONFIG_VERSION: Final = 1
 SERVICE_UPDATE_VALUE = "update_value"
 

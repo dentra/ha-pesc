@@ -79,14 +79,67 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         return SchemaOptionsFlowHandler(config_entry, OPTIONS_FLOW)
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> FlowResult:
-        # self.entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        return await self.async_step_reauth_confirm({})
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        """Confirm reauth dialog."""
         _LOGGER.debug("async_step_reauth_confirm %s", user_input)
-        return self.async_show_form(step_id="user")
+
+        errors = {}
+        assert self._reauth_entry
+
+        if user_input is not None:
+            data = self._reauth_entry.data.copy()
+            try:
+                user_input = {**self._reauth_entry.data, **user_input}
+                token = await self.api.async_login(
+                    user_input[const.CONF_USERNAME], user_input[const.CONF_PASSWORD]
+                )
+                data[const.CONF_TOKEN] = token
+                _LOGGER.debug("new token is %s", token)
+            except ConfigFlowError as err:
+                errors[err.error_field] = err.error_code
+            except pesc_client.ClientAuthError:
+                errors[const.CONF_PASSWORD] = "invalid_auth"
+            except pesc_client.ClientError as err:
+                errors["base"] = "api_error"
+                _LOGGER.warning(
+                    "Request %s : code=%s, json=%s",
+                    err.request_info.url,
+                    err.code,
+                    err.json,
+                )
+
+            if not errors:
+                self.hass.config_entries.async_update_entry(
+                    self._reauth_entry,
+                    data=data,
+                )
+                await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            description_placeholders={
+                const.CONF_USERNAME: self._reauth_entry.data[const.CONF_USERNAME]
+            },
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    required(const.CONF_PASSWORD, user_input): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD,
+                            autocomplete="current-password",
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
+        )
 
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None):
         """Handle the initial step."""
@@ -97,6 +150,10 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             try:
                 if len(user_input[const.CONF_USERNAME]) < 3:
                     raise ConfigFlowError("invalid_username", const.CONF_USERNAME)
+
+                self._async_abort_entries_match(
+                    {const.CONF_USERNAME: user_input[const.CONF_USERNAME]}
+                )
 
                 if len(user_input[const.CONF_PASSWORD]) < 3:
                     raise ConfigFlowError("invalid_password", const.CONF_PASSWORD)

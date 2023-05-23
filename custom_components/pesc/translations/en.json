@@ -4,22 +4,31 @@
     "config": {
         "title": "New connection to PES",
         "error": {
-            "cant_connect": "Error connection to server",
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
             "invalid_username": "Invalid username",
             "invalid_password": "Invalid password",
             "api_error": "API Error"
         },
         "abort": {
-            "already_configured": "Account already exists"
+            "already_configured": "Account is already configured",
+            "reauth_successful": "Re-authentication was successful"
         },
         "step": {
             "user": {
-                "title": "Данные подключения",
+                "title": "Connection credentials",
                 "data": {
                     "username": "Phone number",
                     "password": "Password"
                 },
                 "description": "Enter account credentials"
+            },
+            "reauth_confirm": {
+                "title": "Reauthenticate Integration",
+                "description": "The token for {username} is expired",
+                "data": {
+                    "password": "Password"
+                }
             }
         }
     },

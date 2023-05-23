@@ -4,13 +4,15 @@
     "config": {
         "title": "Новое подключение ПетроЭлектросСбыт",
         "error": {
-            "cant_connect": "Ошибка подключения к серверу",
+            "cannot_connect": "Ошибка подключения к серверу",
+            "invalid_auth": "Ошибка аутентификации",
             "invalid_username": "Неверное имя пользователя",
             "invalid_password": "Неверный пароль",
             "api_error": "Ошибка API"
         },
         "abort": {
-            "already_configured": "Такой аккаунт уже существует"
+            "already_configured": "Такой аккаунт уже существует",
+            "reauth_successful": "Переподключение успешно"
         },
         "step": {
             "user": {
@@ -20,6 +22,13 @@
                     "password": "Пароль"
                 },
                 "description": "Введите учетные данные"
+            },
+            "reauth_confirm": {
+                "title": "Данные для переподключения",
+                "description": "Токен для {username} устарел",
+                "data": {
+                    "password": "Пароль"
+                }
             }
         }
     },

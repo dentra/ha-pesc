@@ -84,6 +84,7 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             async with async_timeout.timeout(60):
                 return await self.api.async_fetch_all()
         except pesc_client.ClientAuthError as err:
+            _LOGGER.debug("ClientAuthError: code=%s, %s", err.code, err.message)
             # Raising ConfigEntryAuthFailed will cancel future updates
             # and start a config flow with SOURCE_REAUTH (async_step_reauth)
             raise ConfigEntryAuthFailed from err

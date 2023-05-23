@@ -63,9 +63,9 @@ class _PescSensor(CoordinatorEntity[PescDataUpdateCoordinator], sensor.SensorEnt
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(const.DOMAIN, entry_id)},
             configuration_url=pesc_client.PescClient.BASE_URL,
-            name="ПетроЭлектроСбыт",
+            name=const.DEFAULT_NAME,
             model=self.coordinator.api.profile_name,
-            # manufacturer="ПетроЭлектроСбыт",
+            manufacturer=const.DEFAULT_NAME,
         )
         self.meter = meter
 
@@ -104,7 +104,7 @@ class PescSensor(_PescSensor):
     ):
         super().__init__(coordinator, entry_id, meter)
 
-        self._attr_unique_id = f"pesc_{meter.id}"
+        self._attr_unique_id = f"{const.DOMAIN}_{meter.id}"
         self._attr_device_class = sensor.SensorDeviceClass.ENERGY
         self._attr_state_class = sensor.SensorStateClass.TOTAL_INCREASING
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR

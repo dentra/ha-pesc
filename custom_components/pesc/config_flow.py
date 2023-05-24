@@ -62,6 +62,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     _api: pesc_api.PescApi = None
+    _reauth_entry: config_entries.ConfigEntry | None
 
     @property
     def api(self):

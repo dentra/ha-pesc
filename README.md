@@ -1,6 +1,18 @@
-# Интеграция ПетроЭлектроСбыт для Home Assistant
-
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![License][license-shield]][license]
+[![Support author][donate-tinkoff-shield]][donate-tinkoff]
+[![Support author][donate-boosty-shield]][donate-boosty]
+
+[license-shield]: https://img.shields.io/static/v1?label=Лицензия&message=MIT&color=orange&logo=license
+[license]: https://opensource.org/licenses/MIT
+
+[donate-tinkoff-shield]: https://img.shields.io/static/v1?label=Поддержать+автора&message=Тинькофф&color=yellow
+[donate-tinkoff]: https://www.tinkoff.ru/cf/3dZPaLYDBAI
+
+[donate-boosty-shield]: https://img.shields.io/static/v1?label=Поддержать+автора&message=Boosty&color=red
+[donate-boosty]: https://boosty.to/dentra
+
+# Интеграция ПетроЭлектроСбыт для Home Assistant
 
 Интеграция позволяет получить доступ к информации о переданных показателей счетчиков [ПетроЭлектроСбыт](https://ikus.pesc.ru/), а так же предоставляет сервис обновления показаний.
 
@@ -52,3 +64,7 @@ sensor:
 
 Начиная с версии от 22.05.2023 сенсоры со стоимостью тарифа можно добавить автоматически,
 включив соответсвующую опцию в настройках службы.
+
+## Ваша благодарность
+
+Если этот проект оказался для вас полезен и/или вы хотите поддержать его дальнейше развитие, то всегда можно оставить вашу благодарность [переводом на карту](https://www.tinkoff.ru/cf/3dZPaLYDBAI), [разовыми донатом или подпиской на boosty](https://boosty.to/dentra).

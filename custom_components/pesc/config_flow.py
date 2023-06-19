@@ -103,6 +103,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 )
                 data[const.CONF_TOKEN] = token
                 _LOGGER.debug("new token is %s", token)
+                self._reauth_entry.data[const.CONF_TOKEN] = token
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
             except pesc_client.ClientAuthError:

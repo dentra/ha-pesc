@@ -95,7 +95,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         assert self._reauth_entry
 
         if user_input is not None:
-            data = self._reauth_entry.data.copy()
+            data = {}
             try:
                 user_input = {**self._reauth_entry.data, **user_input}
                 token = await self.api.async_login(
@@ -103,7 +103,6 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 )
                 data[const.CONF_TOKEN] = token
                 _LOGGER.debug("new token is %s", token)
-                self._reauth_entry.data[const.CONF_TOKEN] = token
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
             except pesc_client.ClientAuthError:
@@ -120,7 +119,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             if not errors:
                 self.hass.config_entries.async_update_entry(
                     self._reauth_entry,
-                    data=data,
+                    data=self._reauth_entry.data | data,
                 )
                 await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
                 return self.async_abort(reason="reauth_successful")
@@ -186,6 +185,8 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
             if not errors:
                 data[const.CONF_USERNAME] = user_input[const.CONF_USERNAME]
+                if user_input.get(const.CONF_SAVE_PWD, False):
+                    data[const.CONF_PASSWORD] = user_input[const.CONF_PASSWORD]
                 return self.async_create_entry(title=self.api.profile_name, data=data)
         else:
             user_input = {const.CONF_USERNAME: "", const.CONF_PASSWORD: ""}
@@ -206,6 +207,10 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                             autocomplete="current-password",
                         )
                     ),
+                    vol.Optional(
+                        const.CONF_SAVE_PWD,
+                        default=user_input.get(const.CONF_SAVE_PWD, False),
+                    ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
                 },
             ),
             errors=errors,

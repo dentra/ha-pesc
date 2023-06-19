@@ -19,7 +19,8 @@
                 "title": "Connection credentials",
                 "data": {
                     "username": "Phone number",
-                    "password": "Password"
+                    "password": "Password",
+                    "save_password": "Save password"
                 },
                 "description": "Enter account credentials"
             },

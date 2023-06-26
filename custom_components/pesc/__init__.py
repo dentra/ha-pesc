@@ -93,8 +93,8 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
     async def _reauth(self):
         try:
             token = await self.api.async_login(
-                self.config_entry.options[const.CONF_USERNAME],
-                self.config_entry.options[const.CONF_PASSWORD],
+                self.config_entry.data[const.CONF_USERNAME],
+                self.config_entry.data[const.CONF_PASSWORD],
             )
             data = {**self.config_entry.data, const.CONF_TOKEN: token}
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)

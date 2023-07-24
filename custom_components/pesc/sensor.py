@@ -29,7 +29,8 @@ async def async_setup_entry(
 
     diag = entry.options.get(const.CONF_DIAGNOSTIC_SENSORS, False)
     async_add_entities(
-        PescSensor(coordinator, entry.entry_id, m, diag) for m in coordinator.api.meters
+        PescMeterSensor(coordinator, entry.entry_id, m, diag)
+        for m in coordinator.api.meters
     )
 
     if entry.options.get(const.CONF_RATES_SENSORS, False):
@@ -46,17 +47,18 @@ async def async_setup_entry(
                 vol.Range(min=1),
             ),
         },
-        func=_PescSensor.async_update_value.__name__,
+        func=_PescMeterSensor.async_update_value.__name__,
         # required_features=[const.PescEntityFeature.MANUAL],
     )
 
 
-class _PescSensor(CoordinatorEntity[PescDataUpdateCoordinator], sensor.SensorEntity):
+class _PescBaseSensor(
+    CoordinatorEntity[PescDataUpdateCoordinator], sensor.SensorEntity
+):
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
         entry_id: str,
-        meter: pesc_api.MeterInd,
     ):
         super().__init__(coordinator)
         self._attr_device_info = DeviceInfo(
@@ -67,11 +69,21 @@ class _PescSensor(CoordinatorEntity[PescDataUpdateCoordinator], sensor.SensorEnt
             model=self.coordinator.api.profile_name,
             manufacturer=const.DEFAULT_NAME,
         )
-        self.meter = meter
 
     @property
     def api(self) -> pesc_api.PescApi:
         return self.coordinator.api
+
+
+class _PescMeterSensor(_PescBaseSensor):
+    def __init__(
+        self,
+        coordinator: PescDataUpdateCoordinator,
+        entry_id: str,
+        meter: pesc_api.MeterInd,
+    ):
+        super().__init__(coordinator, entry_id)
+        self.meter = meter
 
     async def async_update_value(self, value: int):
         """nothing to do with RO value"""
@@ -93,8 +105,16 @@ class _PescSensor(CoordinatorEntity[PescDataUpdateCoordinator], sensor.SensorEnt
             )
         super()._handle_coordinator_update()
 
+    @property
+    def assumed_state(self) -> bool:
+        return not self.coordinator.last_update_success
 
-class PescSensor(_PescSensor):
+    @property
+    def available(self) -> bool:
+        return True
+
+
+class PescMeterSensor(_PescMeterSensor):
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
@@ -121,6 +141,7 @@ class PescSensor(_PescSensor):
         if not self.meter.auto:
             self._attr_supported_features = const.PescEntityFeature.MANUAL
 
+        self._attr_has_entity_name = True
         self._attr_name = f"{self.meter.account.name} {self.meter.name}"
 
         self._attr_extra_state_attributes = {
@@ -166,7 +187,7 @@ class PescSensor(_PescSensor):
         await self.async_update()
 
 
-class PescRateSensor(_PescSensor):
+class PescRateSensor(_PescMeterSensor):
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,

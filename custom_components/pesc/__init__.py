@@ -78,7 +78,7 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             # asyncio.TimeoutError and aiohttp.ClientError are already
             # handled by the data update coordinator.
             async with async_timeout.timeout(60):
-                return await self.api.async_fetch_all()
+                await self.api.async_fetch_all()
         except pesc_client.ClientAuthError as err:
             _LOGGER.debug("ClientAuthError: code=%s, %s", err.code, err.message)
             # Raising ConfigEntryAuthFailed will cancel future updates
@@ -98,9 +98,8 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             )
             data = {**self.config_entry.data, const.CONF_TOKEN: token}
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)
-
             async with async_timeout.timeout(60):
-                return await self.api.async_fetch_all()
+                await self.api.async_fetch_all()
         except pesc_client.ClientAuthError as err:
             raise ConfigEntryAuthFailed from err
         except pesc_client.ClientError as err:

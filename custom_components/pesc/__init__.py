@@ -1,5 +1,4 @@
 import logging
-from datetime import timedelta
 from typing import Final
 import async_timeout
 
@@ -74,33 +73,29 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             )
 
     async def _async_update_data(self):
+        await self.relogin_and_fetch_(False)
+
+    async def relogin_and_fetch_(self, do_relogin: bool):
         try:
-            # asyncio.TimeoutError and aiohttp.ClientError are already
-            # handled by the data update coordinator.
+            if do_relogin:
+                await self.relogin()
             async with async_timeout.timeout(60):
                 await self.api.async_fetch_all()
         except pesc_client.ClientAuthError as err:
+            if not do_relogin and const.CONF_PASSWORD in self.config_entry.data:
+                await self.relogin_and_fetch_(True)
+                return
             _LOGGER.debug("ClientAuthError: code=%s, %s", err.code, err.message)
             # Raising ConfigEntryAuthFailed will cancel future updates
             # and start a config flow with SOURCE_REAUTH (async_step_reauth)
-            if const.CONF_PASSWORD in self.config_entry.data:
-                await self._reauth()
-            else:
-                raise ConfigEntryAuthFailed from err
-        except pesc_client.ClientError as err:
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
-
-    async def _reauth(self):
-        try:
-            token = await self.api.async_login(
-                self.config_entry.data[const.CONF_USERNAME],
-                self.config_entry.data[const.CONF_PASSWORD],
-            )
-            data = {**self.config_entry.data, const.CONF_TOKEN: token}
-            self.hass.config_entries.async_update_entry(self.config_entry, data=data)
-            async with async_timeout.timeout(60):
-                await self.api.async_fetch_all()
-        except pesc_client.ClientAuthError as err:
             raise ConfigEntryAuthFailed from err
         except pesc_client.ClientError as err:
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+            raise UpdateFailed(f"Ошибка вызова API: {err}") from err
+
+    async def relogin(self):
+        token = await self.api.async_login(
+            self.config_entry.data[const.CONF_USERNAME],
+            self.config_entry.data[const.CONF_PASSWORD],
+        )
+        data = {**self.config_entry.data, const.CONF_TOKEN: token}
+        self.hass.config_entries.async_update_entry(self.config_entry, data=data)

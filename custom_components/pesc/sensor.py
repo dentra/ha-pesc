@@ -6,6 +6,7 @@ import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, callback, HomeAssistantError
 from homeassistant.const import UnitOfEnergy
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.components import sensor
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import entity_platform
@@ -182,9 +183,22 @@ class PescMeterSensor(_PescMeterSensor):
                 f"Новое значение {value} не больше предыдущего {self.meter.value}"
             )
 
-        await self.api.async_update_value(self.meter, value)
-
+        await self.relogin_and_update_(value, False)
         await self.async_update()
+
+    async def relogin_and_update_(self, value: int, do_relogin: bool):
+        try:
+            if do_relogin:
+                await self.coordinator.relogin()
+            await self.api.async_update_value(self.meter, value)
+            _LOGGER.debug('[%s] Update "%s" success', self.entity_id, self.name)
+        except pesc_client.ClientAuthError as err:
+            if not do_relogin:
+                await self.relogin_and_update_(value, True)
+                return
+            raise ConfigEntryAuthFailed from err
+        except pesc_client.ClientError as err:
+            raise HomeAssistantError(f"Ошибка вызова API: {err}") from err
 
 
 class PescRateSensor(_PescMeterSensor):

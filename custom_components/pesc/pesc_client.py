@@ -134,17 +134,21 @@ class PescClient:
         if auth_token:
             self._headers[aiohttp.hdrs.AUTHORIZATION] = f"Bearer {auth_token}"
 
-    async def _async_response_json(self, result: aiohttp.ClientResponse):
+    async def _async_response_json(
+        self, result: aiohttp.ClientResponse, nobodyrequest: bool = False
+    ):
         try:
-            json = await result.json()
             if result.status != 200:
+                json = await result.json()
                 if "code" in json and int(json["code"]) == 5:
                     raise ClientAuthError(result.request_info, json)
                 raise ClientError(result.request_info, json)
-            return json
+            if nobodyrequest:
+                return None
+            return await result.json()
         except aiohttp.ContentTypeError as err:
             raise ClientError(
-                result.request_info, {"code": err.code, "message": err.message}
+                result.request_info, {"code": err.status, "message": err.message}
             ) from err
 
     async def _async_get(self, url: str):
@@ -185,10 +189,7 @@ class PescClient:
             headers=self._headers,
             json=payload,
         )
-        if result.status != 200:
-            json = await result.json()
-            _LOGGER.error("Error update %d: %s", result.status, json)
-            raise ClientError(result.request_info, json)
+        await self._async_response_json(result, True)
 
     @property
     async def async_config(self):

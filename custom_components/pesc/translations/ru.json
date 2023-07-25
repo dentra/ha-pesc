@@ -48,5 +48,50 @@
         "update_value": {
             "name": "Передать показания"
         }
+    },
+    "entity": {
+        "sensor": {
+            "meter": {
+                "state_attributes": {
+                    "type": {
+                        "name": "Тип",
+                        "state": {
+                            "manual": "Ручной",
+                            "auto": "Автоматический"
+                        }
+                    },
+                    "date": {
+                        "name": "Дата передачи показаний"
+                    },
+                    "name": {
+                        "name": "Наименование"
+                    },
+                    "scale_id": {
+                        "name": "Scale ID"
+                    },
+                    "meter_id": {
+                        "name": "Meter ID"
+                    },
+                    "serial": {
+                        "name": "Серийный номер"
+                    },
+                    "account_id": {
+                        "name": "Идентификатор аккаунта"
+                    },
+                    "address": {
+                        "name": "Адрес"
+                    },
+                    "tenancy": {
+                        "name": "Лицевой счет"
+                    },
+                    "tariff_type": {
+                        "name": "Тип тарифа"
+                    },
+                    "tariff_rate": {
+                        "name": "Тарифная ставка"
+                    }
+                }
+            }
+        }
     }
 }

@@ -3,11 +3,11 @@
   "build": {
     "args": {
       // HomeAssistant version
-      "ha_version": "2023.5.2",
+      "ha_version": "2023.7.3",
       // additional APT dependicies
       "apt_deps": "bash-completion less",
       // additional PIP dependicies
-      "pip_deps": "beautifulsoup4"
+      "pip_deps": "beautifulsoup4 mutagen python-dateutil"
     }
   },
   // "runArgs": ["--name","vscode-${containerWorkspaceFolderBasename}"],
@@ -38,7 +38,7 @@
         "python.linting.flake8Enabled": false,
         "python.linting.pylintArgs": [
           "--init-hook",
-          "import sys; sys.path.append('/srv/homeassistant/lib/python3.10/site-packages/')"
+          "import sys; sys.path.append('/srv/homeassistant/lib/python3.11/site-packages/')"
         ],
         "python.languageServer": "Pylance",
         "python.formatting.provider": "black",

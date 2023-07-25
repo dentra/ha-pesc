@@ -34,7 +34,7 @@ async def async_setup_entry(
         for m in coordinator.api.meters
     )
 
-    if entry.options.get(const.CONF_RATES_SENSORS, False):
+    if entry.options.get(const.CONF_RATES_SENSORS, True):
         async_add_entities(
             PescRateSensor(coordinator, entry.entry_id, m)
             for m in coordinator.api.meters
@@ -48,7 +48,7 @@ async def async_setup_entry(
                 vol.Range(min=1),
             ),
         },
-        func=_PescMeterSensor.async_update_value.__name__,
+        func=_PescMeterSensor.async_update_value,
         # required_features=[const.PescEntityFeature.MANUAL],
     )
 
@@ -60,16 +60,28 @@ class _PescBaseSensor(
         self,
         coordinator: PescDataUpdateCoordinator,
         entry_id: str,
+        account_id: int,
+        unique_id: str,
+        name: str,
+        model: str,
     ):
         super().__init__(coordinator)
+
+        self._attr_unique_id = unique_id
+
         self._attr_device_info = DeviceInfo(
-            entry_type=DeviceEntryType.SERVICE,
-            identifiers={(const.DOMAIN, entry_id)},
             configuration_url=pesc_client.PescClient.BASE_URL,
-            name=const.DEFAULT_NAME,
-            model=self.coordinator.api.profile_name,
-            manufacturer=const.DEFAULT_NAME,
+            # connections={},
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(const.DOMAIN, entry_id, account_id)},
+            manufacturer=self.coordinator.api.profile_name,
+            model=model,
+            name=name,
+            # sw_version="",
+            # hw_version="",
         )
+
+        self.entity_id = f"sensor.{self._attr_unique_id}"
 
     @property
     def api(self) -> pesc_api.PescApi:
@@ -82,9 +94,18 @@ class _PescMeterSensor(_PescBaseSensor):
         coordinator: PescDataUpdateCoordinator,
         entry_id: str,
         meter: pesc_api.MeterInd,
+        id_suffix: str = "",
     ):
-        super().__init__(coordinator, entry_id)
+        super().__init__(
+            coordinator,
+            entry_id,
+            meter.account.id,
+            f"{const.DOMAIN}_{meter.id}{id_suffix}",
+            meter.account.name,
+            meter.account.tenancy,
+        )
         self.meter = meter
+        self._update_state_attributes()
 
     async def async_update_value(self, value: int):
         """nothing to do with RO value"""
@@ -116,6 +137,13 @@ class _PescMeterSensor(_PescBaseSensor):
 
 
 class PescMeterSensor(_PescMeterSensor):
+    _attr_device_class = sensor.SensorDeviceClass.ENERGY
+    _attr_state_class = sensor.SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_has_entity_name = True
+    _attr_supported_features = 0
+    _attr_translation_key = "meter"
+
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
@@ -124,42 +152,29 @@ class PescMeterSensor(_PescMeterSensor):
         diag: bool = False,
     ):
         super().__init__(coordinator, entry_id, meter)
-
-        self._attr_unique_id = f"{const.DOMAIN}_{meter.id}"
-        self._attr_device_class = sensor.SensorDeviceClass.ENERGY
-        self._attr_state_class = sensor.SensorStateClass.TOTAL_INCREASING
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-
-        self._update_state_attributes()
-
         if diag:
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
-        self.entity_id = f"sensor.{self._attr_unique_id}"
-
     def _update_state_attributes(self):
-        self._attr_supported_features = 0
         if not self.meter.auto:
             self._attr_supported_features = const.PescEntityFeature.MANUAL
 
-        self._attr_has_entity_name = True
-        self._attr_name = f"{self.meter.account.name} {self.meter.name}"
-
+        self._attr_name = self.meter.name
         self._attr_extra_state_attributes = {
+            "type": self.meter.account.type,
             "date": self.meter.date.isoformat(),
             "name": self.meter.name,
             "scale_id": self.meter.scale_id,
             "meter_id": self.meter.meter.id,
             "serial": self.meter.meter.serial,
-            "account_id": self.meter.account.id,
-            "address": self.meter.account.address,
+            "account_id": str(self.meter.account.id),
             "tenancy": self.meter.account.tenancy,
-            "type": self.meter.account.type,
+            "address": self.meter.account.address,
         }
 
         tariff = self.api.tariff(self.meter.account)
         if tariff is not None:
-            self._attr_extra_state_attributes["tariff"] = tariff.name
+            self._attr_extra_state_attributes["tariff_type"] = tariff.name
             rate = tariff.rate(self.meter.scale_id)
             if rate is not None:
                 self._attr_extra_state_attributes["tariff_rate"] = rate
@@ -202,27 +217,25 @@ class PescMeterSensor(_PescMeterSensor):
 
 
 class PescRateSensor(_PescMeterSensor):
+    _attr_native_unit_of_measurement = const.CURRENCY_RUB
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = "meter"
+
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
         entry_id: str,
         meter: pesc_api.MeterInd,
     ):
-        super().__init__(coordinator, entry_id, meter)
-
-        self._attr_unique_id = f"pesc_{meter.id}_rate"
-        self._attr_native_unit_of_measurement = f"RUB/{UnitOfEnergy.KILO_WATT_HOUR}"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        self._update_state_attributes()
-
-        self.entity_id = f"sensor.{self._attr_unique_id}"
+        super().__init__(coordinator, entry_id, meter, "_rate")
 
     def _update_state_attributes(self):
-        self._attr_name = f"Тариф {self.meter.account.name} {self.meter.name}"
+        self._attr_name = f"Тариф {self.meter.name}"
         tariff = self.coordinator.api.tariff(self.meter.account)
         if tariff is not None:
             self._attr_extra_state_attributes = {
-                "tariff": tariff.name,
+                "tariff_type": tariff.name,
             }
 
     @property

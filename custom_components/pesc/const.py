@@ -19,6 +19,8 @@ CONF_RATES_SENSORS: Final = "rates_sensors"
 
 DEFAULT_UPDATE_INTERVAL: Final = datetime.timedelta(hours=12)
 
+CURRENCY_RUB: Final = "RUB"
+
 
 class PescEntityFeature(IntFlag):
     MANUAL = 1

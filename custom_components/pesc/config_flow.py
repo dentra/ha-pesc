@@ -16,7 +16,6 @@ from homeassistant.helpers import selector
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.schema_config_entry_flow import (
     SchemaConfigFlowHandler,
-    SchemaFlowError,
     SchemaFlowFormStep,
     SchemaFlowMenuStep,
     SchemaOptionsFlowHandler,

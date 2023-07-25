@@ -185,7 +185,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
             if not errors:
                 data[const.CONF_USERNAME] = user_input[const.CONF_USERNAME]
-                if user_input.get(const.CONF_SAVE_PWD, False):
+                if user_input.get(const.CONF_SAVE_PWD, True):
                     data[const.CONF_PASSWORD] = user_input[const.CONF_PASSWORD]
                 return self.async_create_entry(title=self.api.profile_name, data=data)
         else:
@@ -209,7 +209,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                     ),
                     vol.Optional(
                         const.CONF_SAVE_PWD,
-                        default=user_input.get(const.CONF_SAVE_PWD, False),
+                        default=user_input.get(const.CONF_SAVE_PWD, True),
                     ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
                 },
             ),
@@ -247,7 +247,7 @@ async def general_options_schema(
             ),
             vol.Optional(
                 const.CONF_RATES_SENSORS,
-                default=handler.options.get(const.CONF_RATES_SENSORS, False),
+                default=handler.options.get(const.CONF_RATES_SENSORS, True),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
             vol.Optional(
                 const.CONF_DIAGNOSTIC_SENSORS,

@@ -137,9 +137,7 @@ class _PescMeterSensor(_PescBaseSensor):
 
 
 class PescMeterSensor(_PescMeterSensor):
-    _attr_device_class = sensor.SensorDeviceClass.ENERGY
     _attr_state_class = sensor.SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_has_entity_name = True
     _attr_supported_features = 0
     _attr_translation_key = "meter"
@@ -158,6 +156,12 @@ class PescMeterSensor(_PescMeterSensor):
     def _update_state_attributes(self):
         if not self.meter.auto:
             self._attr_supported_features = const.PescEntityFeature.MANUAL
+
+        if self.meter.unit == "кВт*ч":
+            self._attr_device_class = sensor.SensorDeviceClass.ENERGY
+            self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        else:
+            self._attr_native_unit_of_measurement = self.meter.unit
 
         self._attr_name = self.meter.name
         self._attr_extra_state_attributes = {

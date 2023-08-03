@@ -119,7 +119,7 @@ class PescApi:
     _tariffs: Dict[int, Tariff] = {}
 
     def __init__(self, client: pesc_client.PescClient) -> None:
-        _LOGGER.debug("Initialize %s", client.token)
+        # _LOGGER.debug("Initialize %s", client.token)
         self._client = client
         # overwrite client to ensure it is FakeClient
         self.client = FakeClient() if client.token == FakeClient.TOKEN else self._client

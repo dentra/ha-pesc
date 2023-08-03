@@ -152,11 +152,9 @@ class PescClient:
             ) from err
 
     async def _async_get(self, url: str):
-        url = f"{self._API_URL}{url}"
-        _LOGGER.debug("get %s: %s", url, self._headers)
-        result = await self._session.get(url, headers=self._headers)
+        result = await self._session.get(f"{self._API_URL}{url}", headers=self._headers)
         json = await self._async_response_json(result)
-        _LOGGER.debug("res %s", json)
+        _LOGGER.debug("%s: %s", url, json)
         return json
 
     async def async_login(self, username: str, password: str) -> str:

@@ -11,7 +11,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class Account:
-    __slots__ = ("id", "name", "type", "tenancy", "address")
+    __slots__ = ("id", "name", "type", "tenancy", "address", "service_provider_id")
 
     def __init__(self, account: pesc_client.Account) -> None:
         self.id = account["id"]
@@ -19,6 +19,7 @@ class Account:
         self.type = account["readingType"]
         self.tenancy = f"{account['tenancy']['name']['shorted']} № {account['tenancy']['register']}"
         self.address = account["address"]["value"]
+        self.service_provider_id = account["service"]["providerId"]
 
     def __repr__(self) -> str:
         return (
@@ -29,7 +30,7 @@ class Account:
 
 
 class Meter:
-    __slots__ = ("id", "serial")
+    __slots__ = ("id", "serial", "subservice_id")
 
     def __init__(
         self,
@@ -37,9 +38,13 @@ class Meter:
     ) -> None:
         self.id = meter["id"]["registration"]
         self.serial = meter["serial"]
+        self.subservice_id = meter["subserviceId"]
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"[id={self.id}, serial={self.serial}]"
+        return (
+            self.__class__.__name__
+            + f"[id={self.id}, serial={self.serial},subservice_id={self.subservice_id}]"
+        )
 
 
 class MeterInd:
@@ -117,6 +122,7 @@ class PescApi:
     _meters: List[MeterInd] = []
     _groups: List[Group] = []
     _tariffs: Dict[int, Tariff] = {}
+    _subservices: Dict[int, pesc_client.Subservice] = {}
 
     def __init__(self, client: pesc_client.PescClient) -> None:
         # _LOGGER.debug("Initialize %s", client.token)
@@ -164,6 +170,7 @@ class PescApi:
         self._meters.clear()
         self._groups.clear()
         self._tariffs.clear()
+        self._subservices.clear()
 
         accounts = await self.client.async_accounts()
         await asyncio.gather(*(self._load_account(account) for account in accounts))
@@ -174,6 +181,8 @@ class PescApi:
             self._load_meters(acc),
             self._load_tariffs(acc),
         )
+        # load subservices ager meters to store only requred subservices
+        await self._load_subservices(acc)
 
     async def _load_meters(self, acc: Account):
         meters = await self.client.async_meters(acc.id)
@@ -200,6 +209,22 @@ class PescApi:
                 )
                 self._tariffs[acc.id] = tariff
                 _LOGGER.debug("Load %s", tariff)
+
+    async def _load_subservices(self, acc: Account):
+        try:
+            subservices = await self._client.async_subservices(acc.service_provider_id)
+            for subservice in subservices:
+                for meter in self._meters:
+                    if meter.meter.subservice_id == subservice["id"]:
+                        self._subservices[subservice["id"]] = subservice
+                        break
+
+        except pesc_client.ClientError as err:
+            _LOGGER.error(
+                "Failed load subservices for service provider %d: %s",
+                acc.service_provider_id,
+                err,
+            )
 
     async def async_fetch_groups(self) -> None:
         _LOGGER.debug("Fetch groups")
@@ -251,6 +276,9 @@ class PescApi:
             if ind.id == ind_id:
                 return ind
         return None
+
+    def subservice(self, subservice_id: int) -> pesc_client.Subservice | None:
+        return self._subservices.get(subservice_id, None)
 
 
 class FakeClient(pesc_client.PescClient):

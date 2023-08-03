@@ -5,7 +5,7 @@ from typing import Callable
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, callback, HomeAssistantError
-from homeassistant.const import UnitOfEnergy
+from homeassistant.const import UnitOfEnergy, UnitOfVolume
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.components import sensor
 from homeassistant.config_entries import ConfigEntry
@@ -157,9 +157,19 @@ class PescMeterSensor(_PescMeterSensor):
         if not self.meter.auto:
             self._attr_supported_features = const.PescEntityFeature.MANUAL
 
-        if self.meter.unit == "кВт*ч":
+        subservice = self.api.subservice(self.meter.meter.subservice_id)
+        utility = "" if subservice is None else subservice["utility"]
+        if utility == pesc_client.SubserviceUtility.ELECTRICITY:
             self._attr_device_class = sensor.SensorDeviceClass.ENERGY
             self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        elif utility == pesc_client.SubserviceUtility.GAS:
+            self._attr_device_class = sensor.SensorDeviceClass.GAS
+            self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
+        elif utility == pesc_client.SubserviceUtility.WATER:
+            self._attr_device_class = sensor.SensorDeviceClass.WATER
+            self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
+        # TODO implement HEATING device_class and unit_of_measurement
+        # elif utility == pesc_client.SubserviceUtility.HEATING:
         else:
             self._attr_native_unit_of_measurement = self.meter.unit
 
@@ -175,6 +185,14 @@ class PescMeterSensor(_PescMeterSensor):
             "tenancy": self.meter.account.tenancy,
             "address": self.meter.account.address,
         }
+
+        if subservice is not None:
+            self._attr_extra_state_attributes["subservice_id"] = subservice["id"]
+            self._attr_extra_state_attributes["subservice_name"] = subservice["name"]
+            self._attr_extra_state_attributes["subservice_type"] = subservice["type"]
+            self._attr_extra_state_attributes["subservice_utility"] = subservice[
+                "utility"
+            ]
 
         tariff = self.api.tariff(self.meter.account)
         if tariff is not None:

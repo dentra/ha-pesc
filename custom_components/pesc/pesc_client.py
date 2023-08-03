@@ -1,5 +1,7 @@
 import logging
+import json as jsonmod
 from typing import Final, List, TypedDict
+from enum import StrEnum
 import aiohttp
 from homeassistant import exceptions
 
@@ -27,6 +29,16 @@ class AccountTenancy(TypedDict):
     """Номер счета."""
 
     name: AccountTenancyName
+
+
+class AccountService(TypedDict):
+    id: int
+    """Идентиффикатор."""
+    providerId: int
+    payment: dict
+    """
+        "payment": {"type": "by_calculation_at_current","categories": []}
+    """
 
 
 class Account(TypedDict):
@@ -64,11 +76,12 @@ class Account(TypedDict):
             f'{account['tenancy']['name']['shorted']} № {account['tenancy']['register']}'
     """
 
+    service: AccountService
     # fullName: str
     # confirmed: bool
     # autoPaymentOn: bool
     # role: dict
-    # service: dict
+
     # externalSystems  # unknown data type
 
 
@@ -97,6 +110,12 @@ class Meter(TypedDict):
     id: MeterId
     serial: str
     indications: List[MeterIndication]
+    subserviceId: int
+    status: str
+    """
+        ACTIVE
+        AUTOMATED
+    """
 
 
 class ProfileName(TypedDict):
@@ -114,6 +133,24 @@ class Profile(TypedDict):
 class UpdateValuePayload(TypedDict):
     scaleId: int
     value: int
+
+
+class SubserviceUtility(StrEnum):
+    ELECTRICITY = "ELECTRICITY"
+    WATER = "WATER"
+    GAS = "GAS"
+    HEATING = "HEATING"
+    UNKNOWN = "UNKNOWN"
+
+
+class Subservice(TypedDict):
+    description: str
+    id: int
+    name: str
+    """ sample: "Электроэнергия" """
+    type: str
+    """ sample: "BASIC_WITH_VARIABLE_PRICE" """
+    utility: SubserviceUtility
 
 
 class PescClient:
@@ -139,6 +176,11 @@ class PescClient:
     ):
         try:
             if result.status != 200:
+                if result.status == 404:
+                    raise ClientError(
+                        result.request_info,
+                        {"code": 404, "message": f"Not Found: {result.url}"},
+                    )
                 json = await result.json()
                 if "code" in json and int(json["code"]) == 5:
                     raise ClientAuthError(result.request_info, json)
@@ -152,9 +194,15 @@ class PescClient:
             ) from err
 
     async def _async_get(self, url: str):
+        _LOGGER.debug("request: %s", url)
         result = await self._session.get(f"{self._API_URL}{url}", headers=self._headers)
         json = await self._async_response_json(result)
-        _LOGGER.debug("%s: %s", url, json)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            if isinstance(json, list) and len(json) > 10:
+                json_str = "result is too large to display"
+            else:
+                json_str = "\n" + jsonmod.dumps(json, ensure_ascii=False, indent=None)
+            _LOGGER.debug("%s: %s", url, json_str)
         return json
 
     async def async_login(self, username: str, password: str) -> str:
@@ -213,6 +261,11 @@ class PescClient:
     async def async_profile(self) -> Profile:
         # return await self._async_get("/v3/profile")
         return await self._async_get("/v6/users/current")
+
+    async def async_subservices(self, provider_id: int) -> List[Subservice]:
+        return await self._async_get(
+            f"/v7/accounts/providers/{provider_id}/subservices"
+        )
 
     # async def async_groups(self) -> List[IkusPescGroup]:
     #     return await self._async_get("/v3/groups")

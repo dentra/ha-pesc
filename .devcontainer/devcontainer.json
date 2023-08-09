@@ -3,7 +3,7 @@
   "build": {
     "args": {
       // HomeAssistant version
-      "ha_version": "2023.7.3",
+      "ha_version": "2023.8.1",
       // additional APT dependicies
       "apt_deps": "bash-completion less",
       // additional PIP dependicies

@@ -90,6 +90,7 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             # and start a config flow with SOURCE_REAUTH (async_step_reauth)
             raise ConfigEntryAuthFailed from err
         except pesc_client.ClientError as err:
+            _LOGGER.error("Ошибка вызова API: %s", err)
             raise UpdateFailed(f"Ошибка вызова API: {err}") from err
 
     async def relogin(self):

@@ -184,7 +184,9 @@ class PescClient:
                 json = await result.json()
                 if "code" in json and int(json["code"]) == 5:
                     raise ClientAuthError(result.request_info, json)
-                raise ClientError(result.request_info, json)
+                error = ClientError(result.request_info, json)
+                _LOGGER.error(repr(error))
+                raise error
             if nobodyrequest:
                 return None
             return await result.json()

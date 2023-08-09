@@ -18,7 +18,8 @@ class Account:
         self.name = account["alias"]
         self.type = account["readingType"]
         self.tenancy = f"{account['tenancy']['name']['shorted']} № {account['tenancy']['register']}"
-        self.address = account["address"]["value"]
+        address = account.get("address", {})
+        self.address = address.get("value", None) if address else None
         self.service_provider_id = account["service"]["providerId"]
 
     def __repr__(self) -> str:
@@ -200,15 +201,20 @@ class PescApi:
                     return json["value"]
             return None
 
-        for detail in await self.client.async_details(acc.id):
-            if detail["header"] == "Электроэнергия":
-                content = detail["content"]
-                tariff = Tariff(
-                    find_val(content, "Тариф"),
-                    list(map(float, find_val(content, "Тарифная ставка").split("/"))),
-                )
-                self._tariffs[acc.id] = tariff
-                _LOGGER.debug("Load %s", tariff)
+        try:
+            for detail in await self.client.async_details(acc.id):
+                if detail["header"] == "Электроэнергия":
+                    content = detail["content"]
+                    tariff = Tariff(
+                        find_val(content, "Тариф"),
+                        list(
+                            map(float, find_val(content, "Тарифная ставка").split("/"))
+                        ),
+                    )
+                    self._tariffs[acc.id] = tariff
+                    _LOGGER.debug("Load %s", tariff)
+        except pesc_client.ClientError:
+            pass
 
     async def _load_subservices(self, acc: Account):
         try:

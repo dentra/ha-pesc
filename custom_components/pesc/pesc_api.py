@@ -1,7 +1,7 @@
-import logging
-from typing import List, Dict, Final
-from datetime import datetime
 import asyncio
+import logging
+from datetime import datetime
+from typing import Dict, Final, List
 
 from homeassistant.util import slugify
 
@@ -98,31 +98,59 @@ class Group:
 
 
 class Tariff:
-    __slots__ = ("name", "rates")
+    __slots__ = ("name", "kind", "rates")
     name: str
+    """ Нпример: "Холодное водоснабжение" или "Горячее водоснабжение" и т.д. """
+    kind: str | None
+    """ Например: "Двухтарифный" """
     rates: List[float]
 
-    def __init__(self, name: str, rates: List[float]) -> None:
+    def __init__(self, name: str, kind: str, rates: List[float]) -> None:
         self.name = name
+        self.kind = kind
         self.rates = rates
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"[name={self.name}, rates={self.rates}]"
+        return (
+            self.__class__.__name__
+            + f"[name={self.name}, kind={self.kind}, rates={self.rates}]"
+        )
 
     def rate(self, scale_id: int) -> float | None:
-        if self.name == "Двухтарифный" and len(self.rates) == 2:
-            if scale_id == 2:
-                return self.rates[0]
-            if scale_id == 3:
-                return self.rates[1]
-        return None
+        if len(self.rates) == 0:
+            return None
+
+        if self.name in [
+            "Холодное водоснабжение",
+            "Горячее водоснабжение",
+            "ГВС",
+            "Водоотведение ХВС",
+            "Водоотведение ГВС",
+        ]:
+            return self.rates[0]
+
+        if self.name == "Электроэнергия":
+            if self.kind == "Двухтарифный" and len(self.rates) == 2:
+                if scale_id == 2:
+                    return self.rates[0]
+                if scale_id == 3:
+                    return self.rates[1]
+            else:
+                _LOGGER.warning(
+                    'Unsupported tariff "%s" kind "%s"', self.name, self.kind
+                )
+
+        if len(self.rates) == 1:
+            return self.rates[0]
+        else:
+            return "/".join(self.rates)
 
 
 class PescApi:
     _profile: pesc_client.Profile | None = None
     _meters: List[MeterInd] = []
     _groups: List[Group] = []
-    _tariffs: Dict[int, Tariff] = {}
+    _tariffs: Dict[int, list[Tariff]] = {}
     _subservices: Dict[int, pesc_client.Subservice] = {}
 
     def __init__(self, client: pesc_client.PescClient) -> None:
@@ -178,11 +206,12 @@ class PescApi:
 
     async def _load_account(self, account: pesc_client.Account):
         acc = Account(account)
+        _LOGGER.debug("Got %s", acc)
         await asyncio.gather(
             self._load_meters(acc),
             self._load_tariffs(acc),
         )
-        # load subservices ager meters to store only requred subservices
+        # load subservices after meters to store only requred subservices
         await self._load_subservices(acc)
 
     async def _load_meters(self, acc: Account):
@@ -192,7 +221,7 @@ class PescApi:
             for met_ind in meter["indications"]:
                 ind = MeterInd(acc, met, met_ind)
                 self._meters.append(ind)
-                _LOGGER.debug("Load %s", ind)
+                _LOGGER.debug("Got %s", ind)
 
     async def _load_tariffs(self, acc: Account):
         def find_val(json_list, key) -> str:
@@ -203,17 +232,21 @@ class PescApi:
 
         try:
             for detail in await self.client.async_details(acc.id):
-                if detail["header"] == "Электроэнергия":
-                    content = detail["content"]
-                    tariff = Tariff(
-                        find_val(content, "Тариф"),
-                        list(
-                            map(float, find_val(content, "Тарифная ставка").split("/"))
-                        ),
-                    )
-                    self._tariffs[acc.id] = tariff
-                    _LOGGER.debug("Load %s", tariff)
+                content = detail["content"]
+                rates = find_val(content, "Тарифная ставка")
+                if not rates:
+                    continue
+                tariff = Tariff(
+                    detail["header"],
+                    find_val(content, "Тариф"),
+                    list(map(float, rates.replace(",", ".").split("/"))),
+                )
+                if acc.id not in self._tariffs:
+                    self._tariffs[acc.id] = []
+                self._tariffs[acc.id].append(tariff)
+                _LOGGER.debug("Got %s", tariff)
         except pesc_client.ClientError:
+            # no details returned. iе is sometimes normal
             pass
 
     async def _load_subservices(self, acc: Account):
@@ -274,8 +307,15 @@ class PescApi:
     def groups(self) -> List[Group]:
         return self._groups
 
-    def tariff(self, account: Account) -> Tariff | None:
-        return self._tariffs.get(account.id)
+    def tariff(self, ind: MeterInd) -> Tariff | None:
+        subservice = self.subservice(ind.meter.subservice_id)
+        if not subservice:
+            return None
+        tariffs = self._tariffs.get(ind.account.id, [])
+        for tariff in tariffs:
+            if tariff.name == subservice["name"]:
+                return tariff
+        return None
 
     def find_ind(self, ind_id: str) -> MeterInd | None:
         for ind in self.meters:

@@ -1,7 +1,8 @@
-import logging
 import json as jsonmod
-from typing import Final, List, TypedDict
+import logging
 from enum import StrEnum
+from typing import Final, List, TypedDict
+
 import aiohttp
 from homeassistant import exceptions
 
@@ -189,7 +190,16 @@ class PescClient:
                 raise error
             if nobodyrequest:
                 return None
-            return await result.json()
+
+            if result.content_type == "application/json":
+                return await result.json()
+            else:
+                _LOGGER.warning(
+                    "Unknown content type: %s, content length %s",
+                    result.content_type,
+                    result.content_length,
+                )
+                return {}
         except aiohttp.ContentTypeError as err:
             raise ClientError(
                 result.request_info, {"code": err.status, "message": err.message}
@@ -200,7 +210,7 @@ class PescClient:
         result = await self._session.get(f"{self._API_URL}{url}", headers=self._headers)
         json = await self._async_response_json(result)
         if _LOGGER.isEnabledFor(logging.DEBUG):
-            if isinstance(json, list) and len(json) > 10:
+            if isinstance(json, list) and len(json) > 100:
                 json_str = "result is too large to display"
             else:
                 json_str = "\n" + jsonmod.dumps(json, ensure_ascii=False, indent=None)
@@ -292,10 +302,10 @@ class PescClient:
     # async def async_apartment_info(self, account_id: int):
     #     return await self._async_get(f"/v3/accounts/{account_id}/apartment-info")
 
-    async def async_meter_info(self, account_id: int, meter_id):
-        return await self._async_get(
-            f"/v3/accounts/{account_id}/meters/{meter_id}/meter-info"
-        )
+    # async def async_meter_info(self, account_id: int, meter_id):
+    #     return await self._async_get(
+    #         f"/v3/accounts/{account_id}/meters/{meter_id}/meter-info"
+    #     )
 
     async def async_tariff(self, account_id: int):
         return await self._async_get(f"/v3/accounts/{account_id}/tariff")

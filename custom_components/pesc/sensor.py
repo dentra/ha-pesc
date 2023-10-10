@@ -3,18 +3,17 @@ import logging
 from typing import Callable
 
 import voluptuous as vol
-
-from homeassistant.core import HomeAssistant, callback, HomeAssistantError
-from homeassistant.const import UnitOfEnergy, UnitOfVolume
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.components import sensor
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfEnergy, UnitOfVolume
+from homeassistant.core import HomeAssistant, HomeAssistantError, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import const, pesc_api, pesc_client, PescDataUpdateCoordinator
+from . import PescDataUpdateCoordinator, const, pesc_api, pesc_client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,14 +29,12 @@ async def async_setup_entry(
 
     diag = entry.options.get(const.CONF_DIAGNOSTIC_SENSORS, False)
     async_add_entities(
-        PescMeterSensor(coordinator, entry.entry_id, m, diag)
-        for m in coordinator.api.meters
+        PescMeterSensor(coordinator, m, diag) for m in coordinator.api.meters
     )
 
     if entry.options.get(const.CONF_RATES_SENSORS, True):
         async_add_entities(
-            PescRateSensor(coordinator, entry.entry_id, m)
-            for m in coordinator.api.meters
+            PescRateSensor(coordinator, m) for m in coordinator.api.meters
         )
 
     entity_platform.async_get_current_platform().async_register_entity_service(
@@ -59,7 +56,6 @@ class _PescBaseSensor(
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
-        entry_id: str,
         account_id: int,
         unique_id: str,
         name: str,
@@ -67,13 +63,17 @@ class _PescBaseSensor(
     ):
         super().__init__(coordinator)
 
+        entry = coordinator.config_entry
+
+        _LOGGER.debug("Initialize %s for %s", self.__class__.__name__, entry.title)
+
         self._attr_unique_id = unique_id
 
         self._attr_device_info = DeviceInfo(
             configuration_url=pesc_client.PescClient.BASE_URL,
             # connections={},
             entry_type=DeviceEntryType.SERVICE,
-            identifiers={(const.DOMAIN, entry_id, account_id)},
+            identifiers={(const.DOMAIN, entry.entry_id, account_id)},
             manufacturer=self.coordinator.api.profile_name,
             model=model,
             name=name,
@@ -92,13 +92,11 @@ class _PescMeterSensor(_PescBaseSensor):
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
-        entry_id: str,
         meter: pesc_api.MeterInd,
         id_suffix: str = "",
     ):
         super().__init__(
             coordinator,
-            entry_id,
             meter.account.id,
             f"{const.DOMAIN}_{meter.id}{id_suffix}",
             meter.account.name,
@@ -119,7 +117,7 @@ class _PescMeterSensor(_PescBaseSensor):
         ind = self.api.find_ind(self.meter.id)
         if ind is not None:
             self.meter = ind
-            _LOGGER.debug("[%s] New inndication %s", self.entity_id, self.meter)
+            _LOGGER.debug("[%s] New indication %s", self.entity_id, self.meter)
             self._update_state_attributes()
         else:
             _LOGGER.warning(
@@ -145,11 +143,10 @@ class PescMeterSensor(_PescMeterSensor):
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
-        entry_id: str,
         meter: pesc_api.MeterInd,
         diag: bool = False,
     ):
-        super().__init__(coordinator, entry_id, meter)
+        super().__init__(coordinator, meter)
         if diag:
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -194,9 +191,10 @@ class PescMeterSensor(_PescMeterSensor):
                 "utility"
             ]
 
-        tariff = self.api.tariff(self.meter.account)
+        tariff = self.api.tariff(self.meter)
         if tariff is not None:
-            self._attr_extra_state_attributes["tariff_type"] = tariff.name
+            if tariff.name is not None:
+                self._attr_extra_state_attributes["tariff_kind"] = tariff.kind
             rate = tariff.rate(self.meter.scale_id)
             if rate is not None:
                 self._attr_extra_state_attributes["tariff_rate"] = rate
@@ -239,7 +237,9 @@ class PescMeterSensor(_PescMeterSensor):
 
 
 class PescRateSensor(_PescMeterSensor):
-    _attr_native_unit_of_measurement = const.CURRENCY_RUB
+    _attr_native_unit_of_measurement = (
+        f"{const.CURRENCY_RUB}/{UnitOfEnergy.KILO_WATT_HOUR}"
+    )
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_translation_key = "meter"
@@ -247,23 +247,22 @@ class PescRateSensor(_PescMeterSensor):
     def __init__(
         self,
         coordinator: PescDataUpdateCoordinator,
-        entry_id: str,
         meter: pesc_api.MeterInd,
     ):
-        super().__init__(coordinator, entry_id, meter, "_rate")
+        super().__init__(coordinator, meter, "_rate")
 
     def _update_state_attributes(self):
         self._attr_name = f"Тариф {self.meter.name}"
-        tariff = self.coordinator.api.tariff(self.meter.account)
+        tariff = self.coordinator.api.tariff(self.meter)
         if tariff is not None:
             self._attr_extra_state_attributes = {
-                "tariff_type": tariff.name,
+                "tariff_kind": tariff.kind,
             }
 
     @property
     def native_value(self) -> float | None:
         """Return the value of the sensor."""
-        tariff = self.coordinator.api.tariff(self.meter.account)
+        tariff = self.coordinator.api.tariff(self.meter)
         if tariff is None:
             return None
         return tariff.rate(self.meter.scale_id)

@@ -84,7 +84,7 @@
                     "tenancy": {
                         "name": "Лицевой счет"
                     },
-                    "tariff_type": {
+                    "tariff_kind": {
                         "name": "Тип тарифа"
                     },
                     "tariff_rate": {

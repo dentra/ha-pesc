@@ -7,7 +7,7 @@
       // additional APT dependicies
       "apt_deps": "bash-completion less",
       // additional PIP dependicies
-      "pip_deps": "beautifulsoup4 mutagen python-dateutil"
+      "pip_deps": "beautifulsoup4 mutagen python-dateutil numpy"
     }
   },
   // "runArgs": ["--name","vscode-${containerWorkspaceFolderBasename}"],

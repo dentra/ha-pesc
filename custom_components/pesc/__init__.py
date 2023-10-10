@@ -1,15 +1,15 @@
 import logging
 from typing import Final
-import async_timeout
 
-from homeassistant.core import HomeAssistant
+import async_timeout
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from . import pesc_api, pesc_client, const
+from . import const, pesc_api, pesc_client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +61,7 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=const.DEFAULT_UPDATE_INTERVAL,
         )
 
+        _LOGGER.debug("Initialize updater for %s", entry.title)
         self.api = pesc_api.PescApi(
             pesc_client.PescClient(
                 async_get_clientsession(hass), entry.data[const.CONF_TOKEN]

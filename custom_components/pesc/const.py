@@ -1,7 +1,7 @@
 """Constants for the integration."""
 import datetime
-from typing import Final
 from enum import IntFlag
+from typing import Final
 
 DOMAIN: Final = "pesc"
 DEFAULT_NAME: Final = "ПетроЭлектроСбыт"

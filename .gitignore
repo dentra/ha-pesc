@@ -2,8 +2,6 @@
 *.pyc
 /.vscode
 
-/ha_storage
+/config
 /hass
-/main.py
-/test.html
-/configuration.yaml
+/venv

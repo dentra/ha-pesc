@@ -1,6 +1,6 @@
 update_value:
-  name: Update value
-  description: Update meter readings
+  name: Update Energy Value
+  description: Update energy meter readings. Call this service twice for every rate readings.
   target:
     entity:
       integration: pesc
@@ -14,10 +14,11 @@ update_value:
     value:
       name: Value
       description: The new meter readings to set
-      example: "12345"
+      example: "0"
       required: true
       selector:
         number:
           min: 1
           max: 999999
           unit_of_measurement: kWh
+          mode: box

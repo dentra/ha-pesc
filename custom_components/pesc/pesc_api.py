@@ -166,7 +166,9 @@ class PescApi:
             self.client = FakeClient()
         return await self.client.async_login(username, password)
 
-    async def async_update_value(self, meter: MeterInd, value: int) -> None:
+    async def async_update_value(
+        self, meter: MeterInd, value: int
+    ) -> list[pesc_client.UpdateValuePayload]:
         _LOGGER.debug("Update %s %s to %d", meter.account.name, meter.name, value)
         values: list[pesc_client.UpdateValuePayload] = []
         for mtr in self.meters:
@@ -176,6 +178,7 @@ class PescApi:
                     pesc_client.UpdateValuePayload(scaleId=mtr.scale_id, value=val)
                 )
         await self.client.async_update_value(meter.account.id, meter.meter.id, values)
+        return values
 
     async def async_fetch_all(self) -> None:
         """Fetch profile and data."""

@@ -2,11 +2,19 @@
 import logging
 from typing import Callable
 
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components import sensor
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfVolume
-from homeassistant.core import HomeAssistant, HomeAssistantError, callback
+from homeassistant.core import (
+    HomeAssistant,
+    HomeAssistantError,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceEntryType
@@ -37,16 +45,40 @@ async def async_setup_entry(
             PescRateSensor(coordinator, m) for m in coordinator.api.meters
         )
 
-    entity_platform.async_get_current_platform().async_register_entity_service(
-        name=const.SERVICE_UPDATE_VALUE,
-        schema={
-            vol.Required(const.CONF_VALUE): vol.All(
-                vol.Coerce(int),
-                vol.Range(min=1),
-            ),
-        },
-        func=_PescMeterSensor.async_update_value,
-        # required_features=[const.PescEntityFeature.MANUAL],
+    service_schema = {
+        vol.Required(const.CONF_VALUE): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=1),
+        ),
+        vol.Optional("throws"): vol.All(
+            vol.Coerce(bool),
+            vol.DefaultTo(True),
+        ),
+    }
+
+    platform = entity_platform.async_get_current_platform()
+
+    async def async_execute_update_valaue(service_call: ServiceCall) -> ServiceResponse:
+        # device_id: service_call.data.get(homeassistant.const.ATTR_DEVICE_ID)
+        entities = await platform.async_extract_from_service(service_call)
+        if len(entities) != 1:
+            raise HomeAssistantError("Only one entity should be selected")
+
+        entity = entities[0]
+        if not isinstance(entity, _PescMeterSensor):
+            raise HomeAssistantError("PescMeterSensor entity should be selected")
+
+        return await entity.async_update_value(
+            service_call.data[const.CONF_VALUE],
+            service_call.return_response,
+        )
+
+    hass.services.async_register(
+        const.DOMAIN,
+        const.SERVICE_UPDATE_VALUE,
+        async_execute_update_valaue,
+        cv.make_entity_service_schema(service_schema),
+        SupportsResponse.OPTIONAL,
     )
 
 
@@ -105,7 +137,9 @@ class _PescMeterSensor(_PescBaseSensor):
         self.meter = meter
         self._update_state_attributes()
 
-    async def async_update_value(self, value: int):
+    async def async_update_value(
+        self, value: int, return_response: bool = True
+    ) -> ServiceResponse:
         """nothing to do with RO value"""
 
     def _update_state_attributes(self):
@@ -207,33 +241,51 @@ class PescMeterSensor(_PescMeterSensor):
     def __str__(self):
         return f"{self.meter.value}"
 
-    async def async_update_value(self, value: int):
+    async def async_update_value(
+        self, value: int, return_response: bool = True
+    ) -> ServiceResponse:
         _LOGGER.debug('[%s]: Updating "%s" to %d', self.entity_id, self.name, value)
 
         if self.meter.auto:
-            raise HomeAssistantError("Показания передаются в автоматическом режиме")
+            msg = "Показания передаются в автоматическом режиме"
+            if not return_response:
+                raise HomeAssistantError(msg)
+            return {"code": -2, "message": msg}
 
-        if value <= self.state:
-            raise HomeAssistantError(
-                f"Новое значение {value} не больше предыдущего {self.meter.value}"
-            )
+        if value < self.state:
+            msg = f"Новое значение {value} меньше предыдущего {int(self.meter.value)}"
+            if not return_response:
+                raise HomeAssistantError(msg)
+            return {"code": -3, "message": msg}
 
-        await self.relogin_and_update_(value, False)
+        res = await self.relogin_and_update_(value, return_response, False)
         await self.async_update()
+        return res
 
-    async def relogin_and_update_(self, value: int, do_relogin: bool):
+    async def relogin_and_update_(
+        self, value: int, return_response: bool, do_relogin: bool
+    ) -> ServiceResponse:
         try:
             if do_relogin:
                 await self.coordinator.relogin()
-            await self.api.async_update_value(self.meter, value)
+            payload = await self.api.async_update_value(self.meter, value)
             _LOGGER.debug('[%s] Update "%s" success', self.entity_id, self.name)
+            return {
+                "code": 0,
+                "message": "Операция выполнена успешно",
+                "payload": payload,
+            }
         except pesc_client.ClientAuthError as err:
             if not do_relogin:
-                await self.relogin_and_update_(value, True)
-                return
-            raise ConfigEntryAuthFailed from err
+                await self.relogin_and_update_(value, return_response, True)
+                return None
+            if not return_response:
+                raise ConfigEntryAuthFailed from err
+            return {"code": err.code, "message": err.message}
         except pesc_client.ClientError as err:
-            raise HomeAssistantError(f"Ошибка вызова API: {err}") from err
+            if not return_response:
+                raise HomeAssistantError(f"Ошибка вызова API: {err}") from err
+            return {"code": err.code, "message": err.message}
 
 
 class PescRateSensor(_PescMeterSensor):

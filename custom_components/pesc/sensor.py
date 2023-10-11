@@ -289,9 +289,6 @@ class PescMeterSensor(_PescMeterSensor):
 
 
 class PescRateSensor(_PescMeterSensor):
-    _attr_native_unit_of_measurement = (
-        f"{const.CURRENCY_RUB}/{UnitOfEnergy.KILO_WATT_HOUR}"
-    )
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_translation_key = "meter"
@@ -302,6 +299,27 @@ class PescRateSensor(_PescMeterSensor):
         meter: pesc_api.MeterInd,
     ):
         super().__init__(coordinator, meter, "_rate")
+
+        subservice = self.api.subservice(self.meter.meter.subservice_id)
+        utility = "" if subservice is None else subservice["utility"]
+        if utility == pesc_client.SubserviceUtility.ELECTRICITY:
+            self._attr_native_unit_of_measurement = (
+                f"{const.CURRENCY_RUB}/{UnitOfEnergy.KILO_WATT_HOUR}"
+            )
+        elif utility == pesc_client.SubserviceUtility.GAS:
+            self._attr_native_unit_of_measurement = (
+                f"{const.CURRENCY_RUB}/{UnitOfVolume.CUBIC_METERS}"
+            )
+        elif utility == pesc_client.SubserviceUtility.WATER:
+            self._attr_native_unit_of_measurement = (
+                f"{const.CURRENCY_RUB}/{UnitOfVolume.CUBIC_METERS}"
+            )
+        # TODO implement HEATING device_class and unit_of_measurement
+        # elif utility == pesc_client.SubserviceUtility.HEATING:
+        else:
+            self._attr_native_unit_of_measurement = (
+                f"{const.CURRENCY_RUB}/{self.meter.unit}"
+            )
 
     def _update_state_attributes(self):
         self._attr_name = f"Тариф {self.meter.name}"

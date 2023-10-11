@@ -292,6 +292,7 @@ class PescRateSensor(_PescMeterSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_translation_key = "meter"
+    _attr_icon = "mdi:currency-rub"
 
     def __init__(
         self,

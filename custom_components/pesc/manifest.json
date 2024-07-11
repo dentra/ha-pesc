@@ -1,16 +1,12 @@
 {
-    "domain": "pesc",
-    "name": "Pesc",
-    "config_flow": true,
-    "documentation": "https://github.com/dentra/ha-pesc",
-    "issue_tracker": "https://github.com/dentra/ha-pesc/issues",
-    "codeowners": [
-        "@dentra"
-    ],
-    "dependencies": [],
-    "requirements": [
-        "numpy"
-    ],
-    "version": "2023.5.0",
-    "iot_class": "cloud_polling"
+  "domain": "pesc",
+  "name": "Pesc",
+  "config_flow": true,
+  "documentation": "https://github.com/dentra/ha-pesc",
+  "issue_tracker": "https://github.com/dentra/ha-pesc/issues",
+  "codeowners": ["@dentra"],
+  "dependencies": [],
+  "requirements": ["numpy"],
+  "version": "2024.7.0",
+  "iot_class": "cloud_polling"
 }

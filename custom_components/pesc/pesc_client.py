@@ -205,9 +205,12 @@ class PescClient:
                 result.request_info, {"code": err.status, "message": err.message}
             ) from err
 
-    async def _async_get(self, url: str):
+    async def _async_get_raw(self, url: str) -> aiohttp.ClientResponse:
         _LOGGER.debug("request: %s", url)
-        result = await self._session.get(f"{self._API_URL}{url}", headers=self._headers)
+        return await self._session.get(f"{self._API_URL}{url}", headers=self._headers)
+
+    async def _async_get(self, url: str):
+        result = await self._async_get_raw(url)
         json = await self._async_response_json(result)
         if _LOGGER.isEnabledFor(logging.DEBUG):
             if isinstance(json, list) and len(json) > 100:
@@ -262,7 +265,14 @@ class PescClient:
         return await self._async_response_json(result)
 
     async def async_accounts(self) -> List[Account]:
-        return await self._async_get("/v7/accounts")
+        return await self._async_get("/v8/accounts")
+
+    async def async_reading_type(self, account_id: int) -> str:
+        result = await self._async_get_raw(f"/v8/accounts/{account_id}/reading-types")
+        return await result.text()
+
+    async def async_address(self, account_id: int) -> AccountAddress:
+        return await self._async_get(f"/v8/accounts/{account_id}/address")
 
     async def async_groups(self) -> List[Group]:
         return await self._async_get("/v6/accounts/groups")
@@ -311,7 +321,7 @@ class PescClient:
         return await self._async_get(f"/v3/accounts/{account_id}/tariff")
 
     async def async_details(self, account_id: int):
-        return await self._async_get(f"/v6/accounts/{account_id}/details")
+        return await self._async_get(f"/v7/accounts/{account_id}/details")
 
 
 class ClientError(exceptions.HomeAssistantError):

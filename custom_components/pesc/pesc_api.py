@@ -16,10 +16,9 @@ class Account:
     def __init__(self, account: pesc_client.Account) -> None:
         self.id = account["id"]
         self.name = account["alias"]
-        self.type = account["readingType"]
+        self.type = None
         self.tenancy = f"{account['tenancy']['name']['shorted']} № {account['tenancy']['register']}"
-        address = account.get("address", {})
-        self.address = address.get("value", None) if address else None
+        self.address = None
         self.service_provider_id = account["service"]["providerId"]
 
     def __repr__(self) -> str:
@@ -211,11 +210,21 @@ class PescApi:
         acc = Account(account)
         _LOGGER.debug("Got %s", acc)
         await asyncio.gather(
+            self._load_reading_types(acc),
+            self._load_address(acc),
             self._load_meters(acc),
             self._load_tariffs(acc),
         )
         # load subservices after meters to store only requred subservices
         await self._load_subservices(acc)
+
+    async def _load_reading_types(self, acc: Account):
+        acc.type = await self.client.async_reading_type(acc.id)
+
+    async def _load_address(self, acc: Account):
+        address = await self.client.async_address(acc.id)
+        if address and "value" in address:
+            acc.address = address["value"]
 
     async def _load_meters(self, acc: Account):
         meters = await self.client.async_meters(acc.id)

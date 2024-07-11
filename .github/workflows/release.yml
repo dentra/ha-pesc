@@ -1,0 +1,25 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release-zip:
+    name: Release ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: "actions/checkout@v2"
+      - name: ZIP Component folder
+        run: |
+          cd ${{ github.workspace }}/custom_components/pesc
+          zip -r pesc.zip ./
+
+      - name: Upload zip to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ github.workspace }}/custom_components/pesc/pesc.zip
+          asset_name: pesc.zip
+          tag: ${{ github.ref }}
+          overwrite: true

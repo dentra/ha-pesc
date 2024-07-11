@@ -174,7 +174,10 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             except pesc_client.ClientAuthError:
                 errors["base"] = "invalid_auth"
             except pesc_client.ClientError as err:
-                errors["base"] = "api_error"
+                if err.message:
+                    errors["base"] = err.message
+                else:
+                    errors["base"] = "api_error"
                 _LOGGER.warning(
                     "Request %s : code=%s, json=%s",
                     err.request_info.url,

@@ -1,104 +1,104 @@
 {
-    "title": "ПетроЭлектросСбыт",
-    "name": "ПЭС",
-    "config": {
-        "title": "Новое подключение ПетроЭлектросСбыт",
-        "error": {
-            "cannot_connect": "Ошибка подключения к серверу",
-            "invalid_auth": "Ошибка аутентификации",
-            "invalid_username": "Неверное имя пользователя",
-            "invalid_password": "Неверный пароль",
-            "api_error": "Ошибка API"
+  "title": "ПетроЭлектросСбыт",
+  "name": "ПЭС",
+  "config": {
+    "title": "Новое подключение ПетроЭлектросСбыт",
+    "error": {
+      "cannot_connect": "Ошибка подключения к серверу",
+      "invalid_auth": "Ошибка аутентификации",
+      "invalid_username": "Неверное имя пользователя",
+      "invalid_password": "Неверный пароль",
+      "api_error": "Ошибка API"
+    },
+    "abort": {
+      "already_configured": "Такой аккаунт уже существует",
+      "reauth_successful": "Переподключение успешно"
+    },
+    "step": {
+      "user": {
+        "title": "Данные подключения",
+        "data": {
+          "username": "Номер телефона (формат +71234567890)",
+          "password": "Пароль",
+          "save_password": "Сохранить пароль"
         },
-        "abort": {
-            "already_configured": "Такой аккаунт уже существует",
-            "reauth_successful": "Переподключение успешно"
-        },
-        "step": {
-            "user": {
-                "title": "Данные подключения",
-                "data": {
-                    "username": "Номер телефона",
-                    "password": "Пароль",
-                    "save_password": "Сохранить пароль"
-                },
-                "description": "Введите учетные данные"
-            },
-            "reauth_confirm": {
-                "title": "Данные для переподключения",
-                "description": "Токен для {username} устарел",
-                "data": {
-                    "password": "Пароль"
-                }
-            }
+        "description": "Введите учетные данные"
+      },
+      "reauth_confirm": {
+        "title": "Данные для переподключения",
+        "description": "Токен для {username} устарел",
+        "data": {
+          "password": "Пароль"
         }
-    },
-    "options": {
-        "step": {
-            "init": {
-                "data": {
-                    "update_interval": "Интервал обновления",
-                    "diagnostic_sensors": "Сенсоры в диагностическом режиме",
-                    "rates_sensors": "Дополнительные сенсоры тарифов"
-                }
-            }
-        }
-    },
-    "services": {
-        "update_value": {
-            "name": "Передать показания",
-            "description": "Передать показания счетчика электроэнергии. Вызывайте сервис несколько раз для каждого из сенсоров тарифа.",
-            "fields": {
-                "value": {
-                    "name": "Значение",
-                    "description": "Новое значение показаний"
-                }
-            }
-        }
-    },
-    "entity": {
-        "sensor": {
-            "meter": {
-                "state_attributes": {
-                    "type": {
-                        "name": "Тип",
-                        "state": {
-                            "manual": "Ручной",
-                            "auto": "Автоматический"
-                        }
-                    },
-                    "date": {
-                        "name": "Дата передачи показаний"
-                    },
-                    "name": {
-                        "name": "Наименование"
-                    },
-                    "scale_id": {
-                        "name": "Scale ID"
-                    },
-                    "meter_id": {
-                        "name": "Meter ID"
-                    },
-                    "serial": {
-                        "name": "Серийный номер"
-                    },
-                    "account_id": {
-                        "name": "Идентификатор аккаунта"
-                    },
-                    "address": {
-                        "name": "Адрес"
-                    },
-                    "tenancy": {
-                        "name": "Лицевой счет"
-                    },
-                    "tariff_kind": {
-                        "name": "Тип тарифа"
-                    },
-                    "tariff_rate": {
-                        "name": "Тарифная ставка"
-                    }
-                }
-            }
-        }
+      }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "update_interval": "Интервал обновления",
+          "diagnostic_sensors": "Сенсоры в диагностическом режиме",
+          "rates_sensors": "Дополнительные сенсоры тарифов"
+        }
+      }
+    }
+  },
+  "services": {
+    "update_value": {
+      "name": "Передать показания",
+      "description": "Передать показания счетчика электроэнергии. Вызывайте сервис несколько раз для каждого из сенсоров тарифа.",
+      "fields": {
+        "value": {
+          "name": "Значение",
+          "description": "Новое значение показаний"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "meter": {
+        "state_attributes": {
+          "type": {
+            "name": "Тип",
+            "state": {
+              "manual": "Ручной",
+              "auto": "Автоматический"
+            }
+          },
+          "date": {
+            "name": "Дата передачи показаний"
+          },
+          "name": {
+            "name": "Наименование"
+          },
+          "scale_id": {
+            "name": "Scale ID"
+          },
+          "meter_id": {
+            "name": "Meter ID"
+          },
+          "serial": {
+            "name": "Серийный номер"
+          },
+          "account_id": {
+            "name": "Идентификатор аккаунта"
+          },
+          "address": {
+            "name": "Адрес"
+          },
+          "tenancy": {
+            "name": "Лицевой счет"
+          },
+          "tariff_kind": {
+            "name": "Тип тарифа"
+          },
+          "tariff_rate": {
+            "name": "Тарифная ставка"
+          }
+        }
+      }
+    }
+  }
 }

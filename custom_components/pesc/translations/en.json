@@ -1,47 +1,46 @@
 {
-    "title": "Pesc",
-    "name": "Pesc",
-    "config": {
-        "title": "New connection to PES",
-        "error": {
-            "cannot_connect": "Failed to connect",
-            "invalid_auth": "Invalid authentication",
-            "invalid_username": "Invalid username",
-            "invalid_password": "Invalid password",
-            "api_error": "API Error"
-        },
-        "abort": {
-            "already_configured": "Account is already configured",
-            "reauth_successful": "Re-authentication was successful"
-        },
-        "step": {
-            "user": {
-                "title": "Connection credentials",
-                "data": {
-                    "username": "Phone number",
-                    "password": "Password",
-                    "save_password": "Save password"
-                },
-                "description": "Enter account credentials"
-            },
-            "reauth_confirm": {
-                "title": "Reauthenticate Integration",
-                "description": "The token for {username} is expired",
-                "data": {
-                    "password": "Password"
-                }
-            }
-        }
+  "title": "Pesc (PSC/EIRC)",
+  "config": {
+    "title": "New connection to PSC/EIRC",
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "invalid_username": "Invalid username",
+      "invalid_password": "Invalid password",
+      "api_error": "API Error"
     },
-    "options": {
-        "step": {
-            "init": {
-                "data": {
-                    "update_interval": "Update interval",
-                    "diagnostic_sensors": "Sensors in diagnostic mode",
-                    "rates_sensors": "Additional rates sensors"
-                }
-            }
+    "abort": {
+      "already_configured": "Account is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    },
+    "step": {
+      "user": {
+        "title": "Connection credentials",
+        "data": {
+          "username": "Phone number",
+          "password": "Password",
+          "save_password": "Save password"
+        },
+        "description": "Enter account credentials"
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Integration",
+        "description": "The token for {username} is expired",
+        "data": {
+          "password": "Password"
         }
+      }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "update_interval": "Update interval",
+          "diagnostic_sensors": "Sensors in diagnostic mode",
+          "rates_sensors": "Additional rates sensors"
+        }
+      }
+    }
+  }
 }

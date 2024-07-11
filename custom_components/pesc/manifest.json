@@ -1,12 +1,12 @@
 {
   "domain": "pesc",
-  "name": "Pesc",
-  "config_flow": true,
-  "documentation": "https://github.com/dentra/ha-pesc",
-  "issue_tracker": "https://github.com/dentra/ha-pesc/issues",
+  "name": "Pesc (PSC/EIRC)",
   "codeowners": ["@dentra"],
+  "config_flow": true,
   "dependencies": [],
+  "documentation": "https://github.com/dentra/ha-pesc",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/dentra/ha-pesc/issues",
   "requirements": ["numpy"],
-  "version": "2024.7.0",
-  "iot_class": "cloud_polling"
+  "version": "2024.7.0"
 }

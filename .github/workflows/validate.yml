@@ -17,6 +17,7 @@ jobs:
           category: integration
 
   validate-hassfest:
+    name: Hassfest
     runs-on: ubuntu-latest
     steps:
       - uses: "actions/checkout@v4"

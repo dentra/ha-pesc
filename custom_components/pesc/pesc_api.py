@@ -96,15 +96,50 @@ class Group:
         )
 
 
+class TariffRate:
+    """Тарифная ставка"""
+
+    __slots__ = ("value", "name", "detail", "description")
+
+    value: float | str
+    """Значение, например: 5.30"""
+
+    name: str
+    """Название, например: День"""
+
+    detail: str
+    """Детализация, например: 07:00 — 23:00"""
+
+    description: str
+    """Описание, например: Тариф 1 диапазона потребления"""
+
+    def __init__(
+        self, value: float | str, name: str, detail: str = "", description: str = ""
+    ) -> None:
+        self.value = value
+        self.name = name
+        self.detail = detail
+        self.description = description
+
+    def __repr__(self) -> str:
+        return (
+            self.__class__.__name__
+            + f"[name={self.name}, value={self.value}, detail={self.detail}, description={self.detail}]"
+        )
+
+
 class Tariff:
     __slots__ = ("name", "kind", "rates")
-    name: str
-    """ Нпример: "Холодное водоснабжение" или "Горячее водоснабжение" и т.д. """
-    kind: str | None
-    """ Например: "Двухтарифный" """
-    rates: List[float]
 
-    def __init__(self, name: str, kind: str, rates: List[float]) -> None:
+    name: str
+    """ Например: "Холодное водоснабжение" или "Горячее водоснабжение" и т.д. """
+
+    kind: str | None
+    """ Тип, например: "Двухтарифный" """
+
+    rates: list[TariffRate]
+
+    def __init__(self, name: str, kind: str, rates: list[TariffRate]) -> None:
         self.name = name
         self.kind = kind
         self.rates = rates
@@ -115,7 +150,7 @@ class Tariff:
             + f"[name={self.name}, kind={self.kind}, rates={self.rates}]"
         )
 
-    def rate(self, scale_id: int) -> float | None:
+    def rate(self, meter: MeterInd) -> TariffRate | None:
         if len(self.rates) == 0:
             return None
 
@@ -128,21 +163,30 @@ class Tariff:
         ]:
             return self.rates[0]
 
+        for rate in self.rates:
+            if rate.name == meter.name:
+                return rate
+
         if self.name == "Электроэнергия":
             if self.kind == "Двухтарифный" and len(self.rates) == 2:
-                if scale_id == 2:
+                if meter.scale_id == 2:
                     return self.rates[0]
-                if scale_id == 3:
+                if meter.scale_id == 3:
                     return self.rates[1]
+            elif self.kind == "Однотарифный" and len(self.rates) == 2:
+                return self.rates[0]
             else:
                 _LOGGER.warning(
-                    'Unsupported tariff "%s" kind "%s"', self.name, self.kind
+                    'Unsupported tariff "%s", kind "%s", rates: %s',
+                    self.name,
+                    self.kind,
+                    self.rates,
                 )
 
         if len(self.rates) == 1:
             return self.rates[0]
-        else:
-            return "/".join(self.rates)
+
+        return TariffRate("/".join([rate for rate in self.rates]), "unknown")
 
 
 class PescApi:
@@ -235,24 +279,60 @@ class PescApi:
                 self._meters.append(ind)
                 _LOGGER.debug("Got %s", ind)
 
-    async def _load_tariffs(self, acc: Account):
-        def find_val(json_list, key) -> str:
+    def _process_tariff_detail(self, detail: dict):
+        def find_any(json_list, res, key, val) -> str:
             for json in json_list:
-                if json["name"] == key:
-                    return json["value"]
+                if json[key] == val:
+                    return json[res]
             return None
 
+        def find_named_val(json_list, key) -> str:
+            return find_any(json_list, "value", "name", key)
+
+        block_type = detail["blockType"]
+        content = detail["content"]
+        if block_type == "SOLID":
+            if rates := find_named_val(content, "Тарифная ставка"):
+                return Tariff(
+                    detail["header"],
+                    find_named_val(content, "Тариф"),
+                    [
+                        TariffRate(float(value), "")
+                        for value in rates.replace(",", ".").split("/")
+                    ],
+                )
+        elif block_type == "TABLE":
+            if kind := find_named_val(content, "Тип тарифа"):
+                return Tariff(
+                    detail["header"],
+                    kind,
+                    [
+                        TariffRate(
+                            float(json["columns"][0]["value"]),
+                            json["name"],
+                            json["description"],
+                            find_any(
+                                detail["columns"],
+                                "name",
+                                "code",
+                                json["columns"][0]["code"],
+                            ),
+                        )
+                        for json in content
+                        if json["name"] != "Тип тарифа"
+                    ],
+                )
+
+        _LOGGER.debug("Unsupported block: %s", detail["header"])
+
+        return None
+
+    async def _load_tariffs(self, acc: Account):
         try:
             for detail in await self.client.async_details(acc.id):
-                content = detail["content"]
-                rates = find_val(content, "Тарифная ставка")
-                if not rates:
+                tariff = self._process_tariff_detail(detail)
+                if not tariff:
                     continue
-                tariff = Tariff(
-                    detail["header"],
-                    find_val(content, "Тариф"),
-                    list(map(float, rates.replace(",", ".").split("/"))),
-                )
                 if acc.id not in self._tariffs:
                     self._tariffs[acc.id] = []
                 self._tariffs[acc.id].append(tariff)

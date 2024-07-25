@@ -1,4 +1,5 @@
 """Sensor implementaion routines"""
+
 import logging
 from typing import Callable
 
@@ -225,14 +226,6 @@ class PescMeterSensor(_PescMeterSensor):
                 "utility"
             ]
 
-        tariff = self.api.tariff(self.meter)
-        if tariff is not None:
-            if tariff.name is not None:
-                self._attr_extra_state_attributes["tariff_kind"] = tariff.kind
-            rate = tariff.rate(self.meter.scale_id)
-            if rate is not None:
-                self._attr_extra_state_attributes["tariff_rate"] = rate
-
     @property
     def native_value(self) -> int:
         """Return the value of the sensor."""
@@ -324,16 +317,27 @@ class PescRateSensor(_PescMeterSensor):
 
     def _update_state_attributes(self):
         self._attr_name = f"Тариф {self.meter.name}"
-        tariff = self.coordinator.api.tariff(self.meter)
-        if tariff is not None:
+
+        if tariff := self.coordinator.api.tariff(self.meter):
             self._attr_extra_state_attributes = {
                 "tariff_kind": tariff.kind,
             }
+            if rate := tariff.rate(self.meter):
+                self._attr_extra_state_attributes["tariff_rate_name"] = rate.name
+                if rate.detail:
+                    self._attr_extra_state_attributes["tariff_rate_detail"] = (
+                        rate.detail
+                    )
+                if rate.description:
+                    self._attr_extra_state_attributes["tariff_rate_description"] = (
+                        rate.description
+                    )
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | str | None:
         """Return the value of the sensor."""
         tariff = self.coordinator.api.tariff(self.meter)
         if tariff is None:
             return None
-        return tariff.rate(self.meter.scale_id)
+        rate = tariff.rate(self.meter)
+        return rate.value if rate else None

@@ -5,7 +5,7 @@
 
 [license-shield]: https://img.shields.io/static/v1?label=Лицензия&message=MIT&color=orange&logo=license
 [license]: https://opensource.org/licenses/MIT
-[donate-tinkoff-shield]: https://img.shields.io/static/v1?label=Поддержать+автора&message=Тинькофф&color=yellow
+[donate-tinkoff-shield]: https://img.shields.io/static/v1?label=Поддержать+автора&message=Т-Банк&color=yellow
 [donate-tinkoff]: https://www.tinkoff.ru/cf/3dZPaLYDBAI
 [donate-boosty-shield]: https://img.shields.io/static/v1?label=Поддержать+автора&message=Boosty&color=red
 [donate-boosty]: https://boosty.to/dentra
@@ -46,23 +46,6 @@ data:
 ```
 
 ## Получение стоимости тарифа
-
-Для тарифа типа "Двухтарифный", можно создать сенсоры с ценой для подключения к панели "Энергия".
-Для других типов тарифа мне нужны доп данные, включайте логи и создавайте задачу, добавлю.
-
-Пример:
-
-```yaml
-sensor:
-  - platform: template
-    sensors:
-      energy_rate:
-        unique_id: energy_rate
-        friendly_name: "Energy Rate"
-        icon_template: mdi:cash
-        unit_of_measurement: "RUB"
-        value_template: '{{ state_attr("sensor.pesc_98765432_1", "tariff_rate")}}'
-```
 
 Начиная с версии от 22.05.2023 сенсоры со стоимостью тарифа можно добавить автоматически,
 включив соответсвующую опцию в настройках службы.

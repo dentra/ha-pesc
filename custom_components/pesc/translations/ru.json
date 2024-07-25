@@ -93,8 +93,14 @@
           "tariff_kind": {
             "name": "Тип тарифа"
           },
-          "tariff_rate": {
-            "name": "Тарифная ставка"
+          "tariff_rate_name": {
+            "name": "Название"
+          },
+          "tariff_rate_detail": {
+            "name": "Действие"
+          },
+          "tariff_rate_description": {
+            "name": "Описание"
           }
         }
       }

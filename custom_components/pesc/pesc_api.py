@@ -210,16 +210,20 @@ class PescApi:
         return await self.client.async_login(username, password)
 
     async def async_update_value(
-        self, meter: MeterInd, value: int
+        self, meter: MeterInd, values: list[pesc_client.UpdateValuePayload]
     ) -> list[pesc_client.UpdateValuePayload]:
-        _LOGGER.debug("Update %s %s to %d", meter.account.name, meter.name, value)
-        values: list[pesc_client.UpdateValuePayload] = []
-        for mtr in self.meters:
-            if mtr.meter.id == meter.meter.id:
-                val = int(value if mtr.scale_id == meter.scale_id else mtr.value)
-                values.append(
-                    pesc_client.UpdateValuePayload(scaleId=mtr.scale_id, value=val)
-                )
+        _LOGGER.debug("Update %s %s to %s", meter.account.name, meter.name, values)
+        meters = [mtr for mtr in self.meters if mtr.meter.id == meter.meter.id]
+        if len(values) != len(meters):
+            for mtr in meters:
+                found = [val for val in values if mtr.scale_id == val["scaleId"]]
+                if not found:
+                    values.append(
+                        pesc_client.UpdateValuePayload(
+                            scaleId=mtr.scale_id, value=mtr.value
+                        )
+                    )
+
         await self.client.async_update_value(meter.account.id, meter.meter.id, values)
         return values
 

@@ -40,9 +40,25 @@
 ```yaml
 service: pesc.update_value
 target:
-  entity_id: sensor.pesc_98765432_1
+  entity_id: sensor.pesc_0123456789_1
 data:
   value: 12345
+```
+
+Или обновление сразу по всем тарифам:
+
+```yaml
+service: pesc.update_value
+target:
+  entity_id:
+    - sensor.pesc_0123456789_2
+    - sensor.pesc_0123456789_3
+data:
+  value:
+    - scale_id: 2
+      value: 12345
+    - scale_id: 3
+      value: 6789
 ```
 
 ## Получение стоимости тарифа

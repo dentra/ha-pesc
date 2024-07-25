@@ -46,10 +46,18 @@ async def async_setup_entry(
             PescRateSensor(coordinator, m) for m in coordinator.api.meters
         )
 
+    schema_value = vol.All(vol.Coerce(int), vol.Range(min=1))
     service_schema = {
-        vol.Required(const.CONF_VALUE): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=1),
+        vol.Required(const.CONF_VALUE): vol.Any(
+            schema_value,
+            cv.ensure_list(
+                vol.Schema(
+                    {
+                        vol.Required("scale_id"): int,
+                        vol.Required(const.CONF_VALUE): schema_value,
+                    }
+                )
+            ),
         ),
         vol.Optional("throws"): vol.All(
             vol.Coerce(bool),
@@ -62,15 +70,48 @@ async def async_setup_entry(
     async def async_execute_update_valaue(service_call: ServiceCall) -> ServiceResponse:
         # device_id: service_call.data.get(homeassistant.const.ATTR_DEVICE_ID)
         entities = await platform.async_extract_from_service(service_call)
-        if len(entities) != 1:
-            raise HomeAssistantError("Only one entity should be selected")
 
-        entity = entities[0]
-        if not isinstance(entity, _PescMeterSensor):
-            raise HomeAssistantError("PescMeterSensor entity should be selected")
+        _LOGGER.debug("async_execute_update_valaue %s", repr(service_call))
 
+        if not entities:
+            raise HomeAssistantError("Ни одной цели не выбрано")
+
+        meter_id = ""
+        for entity in entities:
+            if not isinstance(entity, _PescMeterSensor):
+                raise HomeAssistantError(
+                    "Должна быть выбрана цель типа PescMeterSensor"
+                )
+            if entity.meter.auto:
+                raise HomeAssistantError(
+                    "Показания цели передаются в автоматическом режиме"
+                )
+            if not meter_id:
+                meter_id = entity.meter.meter.id
+            if entity.meter.meter.id != meter_id:
+                raise HomeAssistantError("У всех целей должен быть одинаковый meter_id")
+
+        values = service_call.data[const.CONF_VALUE]
+        if not isinstance(values, list):
+            # most likely call from gui
+            if len(entities) != 1:
+                raise HomeAssistantError("Должна быть выбрана только одна цель")
+            entity: _PescMeterSensor = entities[0]
+            values = [{const.CONF_SCALE_ID: entity.meter.scale_id, "value": values}]
+
+        if len(entities) != len(values):
+            raise HomeAssistantError(
+                "Количество целей должно соответсвовать количеству сущностей"
+            )
+
+        entity: _PescMeterSensor = entities[0]
         return await entity.async_update_value(
-            service_call.data[const.CONF_VALUE],
+            [
+                pesc_client.UpdateValuePayload(
+                    scaleId=val[const.CONF_SCALE_ID], value=val[const.CONF_VALUE]
+                )
+                for val in values
+            ],
             service_call.return_response,
         )
 
@@ -139,7 +180,7 @@ class _PescMeterSensor(_PescBaseSensor):
         self._update_state_attributes()
 
     async def async_update_value(
-        self, value: int, return_response: bool = True
+        self, values: list[pesc_client.UpdateValuePayload], return_response: bool = True
     ) -> ServiceResponse:
         """nothing to do with RO value"""
 
@@ -235,9 +276,9 @@ class PescMeterSensor(_PescMeterSensor):
         return f"{self.meter.value}"
 
     async def async_update_value(
-        self, value: int, return_response: bool = True
+        self, values: list[pesc_client.UpdateValuePayload], return_response: bool = True
     ) -> ServiceResponse:
-        _LOGGER.debug('[%s]: Updating "%s" to %d', self.entity_id, self.name, value)
+        _LOGGER.debug('[%s]: Updating "%s" to %s', self.entity_id, self.name, values)
 
         if self.meter.auto:
             msg = "Показания передаются в автоматическом режиме"
@@ -245,23 +286,27 @@ class PescMeterSensor(_PescMeterSensor):
                 raise HomeAssistantError(msg)
             return {"code": -2, "message": msg}
 
-        if value < self.state:
-            msg = f"Новое значение {value} меньше предыдущего {int(self.meter.value)}"
-            if not return_response:
-                raise HomeAssistantError(msg)
-            return {"code": -3, "message": msg}
+        for value in values:
+            if value["scaleId"] == self.meter.scale_id and value["value"] < self.state:
+                msg = f"Новое значение {value['value']} меньше предыдущего {self.meter.value}"
+                if not return_response:
+                    raise HomeAssistantError(msg)
+                return {"code": -3, "message": msg, "values": values}
 
-        res = await self.relogin_and_update_(value, return_response, False)
+        res = await self.relogin_and_update_(values, return_response, False)
         await self.async_update()
         return res
 
     async def relogin_and_update_(
-        self, value: int, return_response: bool, do_relogin: bool
+        self,
+        values: list[pesc_client.UpdateValuePayload],
+        return_response: bool,
+        do_relogin: bool,
     ) -> ServiceResponse:
         try:
             if do_relogin:
                 await self.coordinator.relogin()
-            payload = await self.api.async_update_value(self.meter, value)
+            payload = await self.api.async_update_value(self.meter, values)
             _LOGGER.debug('[%s] Update "%s" success', self.entity_id, self.name)
             return {
                 "code": 0,
@@ -270,7 +315,7 @@ class PescMeterSensor(_PescMeterSensor):
             }
         except pesc_client.ClientAuthError as err:
             if not do_relogin:
-                await self.relogin_and_update_(value, return_response, True)
+                await self.relogin_and_update_(values, return_response, True)
                 return None
             if not return_response:
                 raise ConfigEntryAuthFailed from err

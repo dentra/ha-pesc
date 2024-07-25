@@ -45,20 +45,29 @@ data:
   value: 12345
 ```
 
-Или обновление сразу по всем тарифам:
+Или обновление сразу по всем тарифам и проверка кода завершения:
 
 ```yaml
-service: pesc.update_value
-target:
-  entity_id:
-    - sensor.pesc_0123456789_2
-    - sensor.pesc_0123456789_3
-data:
-  value:
-    - scale_id: 2
-      value: 12345
-    - scale_id: 3
-      value: 6789
+alias: Отправка показаний
+sequence:
+  - service: pesc.update_value
+    target:
+      entity_id:
+        - sensor.pesc_0123456789_2
+        - sensor.pesc_0123456789_3
+    data:
+      value:
+        - scale_id: 2
+          value: 12345
+        - scale_id: 3
+          value: 6789
+    response_variable: response
+    enabled: true
+  - condition: template
+    value_template: "{{ response.code == 0 }}"
+  - service: notify.notify_me
+    data:
+      message: Показания успешно переданы
 ```
 
 ## Получение стоимости тарифа

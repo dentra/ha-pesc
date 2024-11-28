@@ -226,7 +226,7 @@ class PescClient:
         headers["Captcha"] = "none"
         payload = {"type": "PHONE", "login": username, "password": password}
         result = await self._session.post(
-            f"{self._API_URL}/v6/users/auth", headers=headers, json=payload
+            f"{self._API_URL}/v7/users/auth", headers=headers, json=payload
         )
         json = await self._async_response_json(result)
         self.token = json["auth"]
@@ -246,7 +246,7 @@ class PescClient:
             payload,
         )
         result = await self._session.post(
-            f"{self._API_URL}/v6/accounts/{account_id}/meters/{meter_id}/reading",
+            f"{self._API_URL}/v7/accounts/{account_id}/meters/{meter_id}/reading",
             headers=self._headers,
             json=payload,
         )

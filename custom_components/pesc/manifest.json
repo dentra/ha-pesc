@@ -1,12 +1,16 @@
 {
   "domain": "pesc",
   "name": "Pesc (PSC/EIRC)",
-  "codeowners": ["@dentra"],
+  "codeowners": [
+    "@dentra"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/dentra/ha-pesc",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/dentra/ha-pesc/issues",
-  "requirements": ["numpy"],
-  "version": "2024.7.0"
+  "requirements": [
+    "numpy"
+  ],
+  "version": "master"
 }

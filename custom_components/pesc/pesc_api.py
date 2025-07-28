@@ -57,7 +57,11 @@ class MeterInd:
         ind: pesc_client.MeterIndication,
     ) -> None:
         self.value = ind["previousReading"]
-        self.date = datetime.strptime(ind["previousReadingDate"], "%d.%m.%Y").date()
+        self.date = (
+            datetime.strptime(ind["previousReadingDate"], "%d.%m.%Y").date()
+            if ind["previousReadingDate"] is not None
+            else None
+        )
         self.unit = ind["unit"]
         self.name = ind["scaleName"]
         self.scale_id = ind["meterScaleId"]

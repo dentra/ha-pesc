@@ -305,7 +305,7 @@ class PescMeterSensor(_PescMeterSensor):
     ) -> ServiceResponse:
         try:
             if do_relogin:
-                await self.coordinator.relogin()
+                await self.coordinator._relogin()
             payload = await self.api.async_update_value(self.meter, values)
             _LOGGER.debug('[%s] Update "%s" success', self.entity_id, self.name)
             return {

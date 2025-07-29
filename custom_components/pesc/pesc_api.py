@@ -202,16 +202,47 @@ class PescApi:
 
     def __init__(self, client: pesc_client.PescClient) -> None:
         # _LOGGER.debug("Initialize %s", client.token)
-        self._client = client
-        # overwrite client to ensure it is FakeClient
-        self.client = FakeClient() if client.token == FakeClient.TOKEN else self._client
+        self.client = client
 
-    async def async_login(self, username: str, password: str) -> str:
+    async def async_login(
+        self, username: str, password: str, login_type: str
+    ) -> dict[str, str | list[str]]:
         _LOGGER.debug("Login %s", username)
-        self.client = self._client
-        if username.startswith("test") and password == "test":
-            self.client = FakeClient()
-        return await self.client.async_login(username, password)
+        return await self.client.async_users_auth(
+            username, password, login_type.upper()
+        )
+
+    async def async_relogin(
+        self,
+        username: str,
+        password: str,
+        auth: dict[str, str | list[str]],
+        login_type: str,
+    ) -> dict[str, str | list[str]]:
+        _LOGGER.debug("Relogin %s", username)
+        return await self.client.async_users_reauth(
+            username, password, auth["verified"], login_type.upper()
+        )
+
+    async def async_confirmation_send(
+        self, auth: dict[str, str | list[str]], confirmation_type: str
+    ):
+        transaction_id = auth["transactionId"]
+        _LOGGER.debug("Send confirmation %s: %s", confirmation_type, transaction_id)
+        return await self.client.async_users_check_confirmation_send(
+            transaction_id=transaction_id, confirmation_type=confirmation_type
+        )
+
+    async def async_confirmation_verify(
+        self, auth: dict[str, str | list[str]], confirmation_type: str, code: str
+    ):
+        transaction_id = auth["transactionId"]
+        _LOGGER.debug("Verify confirmation %s: %s", confirmation_type, transaction_id)
+        return await self.client.async_users_check_verification(
+            transaction_id=transaction_id,
+            code=code,
+            confirmation_type=confirmation_type,
+        )
 
     async def async_update_value(
         self, meter: MeterInd, values: list[pesc_client.UpdateValuePayload]
@@ -351,7 +382,7 @@ class PescApi:
 
     async def _load_subservices(self, acc: Account):
         try:
-            subservices = await self._client.async_subservices(acc.service_provider_id)
+            subservices = await self.client.async_subservices(acc.service_provider_id)
             for subservice in subservices:
                 for meter in self._meters:
                     if meter.meter.subservice_id == subservice["id"]:
@@ -375,7 +406,7 @@ class PescApi:
         if not self._profile:
             return None
         phone = self._profile["phone"]
-        if not phone or len(phone) == 0:
+        if not phone:
             return slugify(self._profile["email"])
         if phone[0] == "+":
             return phone[1:]
@@ -425,103 +456,3 @@ class PescApi:
 
     def subservice(self, subservice_id: int) -> pesc_client.Subservice | None:
         return self._subservices.get(subservice_id, None)
-
-
-class FakeClient(pesc_client.PescClient):
-    TOKEN: Final = "ABC-TEST-DEF"
-
-    _accounts: List[pesc_client.Account] = []
-    _groups: List[pesc_client.Group] = []
-    _meters: dict[int, List[pesc_client.Meter]] = {}
-
-    def __init__(self):
-        super().__init__(None, None)
-
-        self.token = self.TOKEN
-
-        for i in range(3):
-            account: pesc_client.Account = {
-                "id": i,
-                "alias": f"Аккаунт {i}",
-                "readingType": "auto" if i == 1 else "manual",
-                "address": {"identifier": False, "value": f"ул Ленина, {i}"},
-                "tenancy": {
-                    "name": {"shorted": "ЕЛС" if i == 0 else "ЛС"},
-                    "register": f"000/00{i}",
-                },
-            }
-
-            self._accounts.append(account)
-
-            if i == 1:
-                self._groups[0]["accounts"].append(account["id"])
-            else:
-                self._groups.append(
-                    {"id": i, "name": f"Группа {i}", "accounts": [account["id"]]}
-                )
-
-            self._meters[i] = []
-
-            meter = pesc_client.Meter(
-                {
-                    "id": {
-                        "provider": 1,
-                        "registration": "111111" if i == 1 else "000000",
-                    },
-                    "serial": "111111" if i == 1 else "000000",
-                    "indications": [],
-                }
-            )
-            for ind in range(2):
-                ind = pesc_client.MeterIndication(
-                    {
-                        "unit": "кВт*ч",
-                        "previousReadingDate": "23.01.2023",
-                        "previousReading": (ind + 1) * 1000,
-                        "scaleName": "День" if ind % 2 != 0 else "Ночь",
-                        "meterScaleId": 2 if ind % 2 != 0 else 3,
-                    },
-                )
-                meter["indications"].append(ind)
-            self._meters[i].append(meter)
-
-    async def async_login(self, username: str, password: str) -> str:
-        return self.token
-
-    async def async_update_value(
-        self,
-        account_id: int,
-        meter_id: str,
-        payload: list[pesc_client.UpdateValuePayload],
-    ) -> None:
-        _LOGGER.debug(
-            "Update account_id=%d, meter_id=%s, payload=%s",
-            account_id,
-            meter_id,
-            payload,
-        )
-        meters = self._meters[account_id]
-        for meter in meters:
-            _LOGGER.debug("meter %s", meter)
-            if meter["id"]["registration"] == meter_id:
-                for ind in meter["indications"]:
-                    if ind["meterScaleId"] == payload["scale_id"]:
-                        _LOGGER.debug("Found %s", ind)
-                        ind["previousReading"] = payload["value"]
-                        ind["previousReadingDate"] = datetime.now().strftime("%d.%m.%Y")
-
-    async def async_accounts(self) -> List[pesc_client.Account]:
-        return self._accounts
-
-    async def async_groups(self) -> List[pesc_client.Group]:
-        return self._groups
-
-    async def async_meters(self, account_id: int) -> List[pesc_client.Meter]:
-        return self._meters[account_id] or []
-
-    async def async_profile(self) -> pesc_client.Profile:
-        return {
-            "email": "a@b.c",
-            "phone": "+71234567890",
-            "name": {"last": "Иванов", "first": "Иван", "patronymic": None},
-        }

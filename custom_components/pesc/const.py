@@ -10,6 +10,8 @@ CONFIG_VERSION: Final = 1
 SERVICE_UPDATE_VALUE = "update_value"
 
 CONF_TOKEN: Final = "token"
+CONF_AUTH: Final = "auth"
+CONF_LOGIN_TYPE: Final = "login_type"
 CONF_USERNAME: Final = "username"
 CONF_PASSWORD: Final = "password"
 CONF_SAVE_PWD: Final = "save_password"

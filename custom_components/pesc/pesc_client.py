@@ -159,14 +159,19 @@ class PescClient:
     _API_URL: Final = f"{BASE_URL}/api"
     _APP_URL: Final = f"{BASE_URL}/application"
 
-    def __init__(self, session: aiohttp.ClientSession, auth_token: str = None) -> None:
+    def __init__(
+        self, session: aiohttp.ClientSession, auth: dict[str, str] | None = None
+    ) -> None:
         self._session = session
         self._headers = {
             aiohttp.hdrs.ACCEPT: "application/json, text/plain, */*",
             aiohttp.hdrs.CONTENT_TYPE: "application/json",
+            "Customer": "ikus-spb",
         }
-        self.token = auth_token
-        self._inject_token(auth_token)
+        self.token = auth.get("auth") if auth else None
+        self.verify_token = None
+        self.access_token = None
+        self._inject_token(self.token)
 
     def _inject_token(self, auth_token: str):
         if auth_token:
@@ -224,9 +229,10 @@ class PescClient:
         headers = self._headers.copy()
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers["Captcha"] = "none"
-        payload = {"type": "PHONE", "login": username, "password": password}
         result = await self._session.post(
-            f"{self._API_URL}/v7/users/auth", headers=headers, json=payload
+            f"{self._API_URL}/v7/users/auth",
+            headers=headers,
+            json={"type": "PHONE", "login": username, "password": password},
         )
         json = await self._async_response_json(result)
         self.token = json["auth"]
@@ -289,6 +295,155 @@ class PescClient:
             f"/v7/accounts/providers/{provider_id}/subservices"
         )
 
+    async def async_users_logout(self):
+        # вызывать метод DELETE на https://ikus.pesc.ru/api/v6/users/auth
+        # в заголовках Bearer-токен
+        # payload: {"access":"...","auth":"...","verified":"..."}
+        pass
+
+    async def async_users_reauth(
+        self, username: str, password: str, verified_token: str, type: str = "PHONE"
+    ) -> dict[str, str]:
+        """
+        возвращает json c полями access и auth.
+
+        * auth - используется в качестве Bearer токена для дальнейших запросов.
+        * access - назначение пока не понятно
+
+        пример:
+          {access: "...", "auth": "..."}
+        """
+        headers = self._headers.copy()
+        headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
+        headers["Captcha"] = "none"
+        headers["Auth-verification"] = verified_token
+
+        result = await self._session.post(
+            f"{self._API_URL}/v8/users/auth",
+            headers=headers,
+            json={"login": username, "password": password, "type": type},
+        )
+        # Ожидаемый статус 424
+        if result.status != 200:
+            raise ClientError(
+                result.request_info,
+                {
+                    "message": f"Неожиданный статус ответа повторной авторизации: {result.status}",
+                },
+            )
+        json = await result.json()
+        self.token = json["auth"]
+        self._inject_token(self.token)
+        return json
+
+    async def async_users_auth(
+        self, username: str, password: str, login_type: str = "PHONE"
+    ) -> dict[str, str | list[str]]:
+        """
+        возвращает json c идентификатором транзакции [transactionId] и массивом строк с типами подтверждения [types].
+
+        в случае неудаче бросает исключение ClientError.
+
+        пример:
+         {"transactionId": "489597b6-9614-46fb-ba6e-5629ad88dfed", "types": ["EMAIL","PHONE","FLASHCALL"]}
+        """
+        headers = self._headers.copy()
+        headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
+        headers["Captcha"] = "none"
+        result = await self._session.post(
+            f"{self._API_URL}/v8/users/auth",
+            headers=headers,
+            json={"login": username, "password": password, "type": login_type},
+        )
+        # Ожидаемый статус 424
+        if result.status != 424:
+            json = {
+                "message": f"Неожиданный статус ответа авторизации: {result.status}"
+            }
+            try:
+                body = await result.json()
+                if body.get("message"):
+                    json = body
+            except:
+                pass
+            raise ClientError(result.request_info, json)
+        json = await result.json()
+        return json
+
+    async def async_users_check_confirmation_send(
+        self, transaction_id: str, confirmation_type="PHONE"
+    ) -> None:
+        headers = self._headers.copy()
+        headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
+        headers[aiohttp.hdrs.REFERER] = (
+            f"https://ikus.pesc.ru/auth/{transaction_id}/verify"
+        )
+
+        result = await self._session.post(
+            f"{self._API_URL}/v7/users/{transaction_id}/{confirmation_type.lower()}/check/confirmation/send",
+            headers=headers,
+            json={},
+        )
+        # Ожидаемый статус 200
+        if result.status != 200:
+            json = {
+                "message": f"Неожиданный статус ответа запроса кода подтверждения: {result.status}"
+            }
+            try:
+                body = await result.json()
+                if body.get("message"):
+                    json = body
+            except:
+                pass
+            raise ClientError(result.request_info, json)
+        # тело ответа значения не имеет
+
+    async def async_users_check_verification(
+        self, transaction_id: str, code: str, confirmation_type="PHONE"
+    ) -> dict[str, str]:
+        """
+        возвращает json c полями access, auth и verified.
+
+        * auth - используется в качестве Bearer токена для дальнейших запросов.
+        * verified - используется для повторной авторизации без запроса второго фактора.
+        * access - назначение пока не понятно
+
+        пример:
+          {access: "...", "auth": "...", "verified": "..."}
+        """
+        headers = self._headers.copy()
+        headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
+        headers[aiohttp.hdrs.REFERER] = (
+            f"https://ikus.pesc.ru/auth/{transaction_id}/verify"
+        )
+        headers["Customer"] = "ikus-spb"
+
+        result = await self._session.post(
+            f"{self._API_URL}/v7/users/{transaction_id}/{confirmation_type.lower()}/check/verification",
+            headers=headers,
+            json={"code": code},
+        )
+        # Ожидаемый статус 200
+        if result.status != 200:
+            json = {
+                "message": f"Неожиданный статус ответа подтверждения кода: {result.status}"
+            }
+            try:
+                body = await result.json()
+                if body.get("message"):
+                    json = body
+            except:
+                pass
+            raise ClientError(result.request_info, json)
+        # возвращает json c полями access, auth и verified
+        # access: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ7XCJ1c2VySWRcIjpudWxsLFwidG9rZW5JZFwiOjEwNTY2MDU3NjIsXCJpc1N1cGVyVXNlclwiOmZhbHNlLFwiZXhwaXJhdGlvblRpbWVcIjpcIjI5LjA3LjIwMjUgMTQ6NTg6MjdcIn0iLCJleHAiOjE3NTM3OTAzMDcsImlhdCI6MTc1Mzc4NjcwN30.De216xpCAyqA2hmWg3NyqYOPxb1-_sEaXwl_iQOTUDQTLTsDgRkyJ-fI4xHbltIxkO1yV5-26ANdWdDc4ffRZg"
+        # auth: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ7XCJ1c2VySWRcIjo2MDM1MzYsXCJ0b2tlbklkXCI6MTA1NjYwNTc2MixcImlzU3VwZXJVc2VyXCI6ZmFsc2UsXCJleHBpcmF0aW9uVGltZVwiOlwiMjkuMDcuMjAyNSAxNDoyODoyN1wifSIsImV4cCI6MTc1Mzc4ODUwNywiaWF0IjoxNzUzNzg2NzA3fQ.JVLbG20smQQy-F0ndCtS9qnT3JbX2z6i76xQHxJLThhvoS3OFYgUkqv34H6Ftwf79f6bEMWG4hI6QHGh0LQWwQ"
+        # verified: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ7XCJ1c2VySWRcIjo2MDM1MzYsXCJ0b2tlbklkXCI6bnVsbCxcImlzU3VwZXJVc2VyXCI6ZmFsc2UsXCJleHBpcmF0aW9uVGltZVwiOlwiMjQuMDcuMjAyNiAxMzo1ODoyN1wifSIsImV4cCI6MTc4NDg5MDcwNywiaWF0IjoxNzUzNzg2NzA3fQ.L3sKutbc32z2W0AFxu5jxjHfhfBd5HeoeK9_Kd65z5wKWvphR6hTP4_fIn1m5KQKFQhrxA7NT75nNabQ0I-Xqg"
+        json = await result.json()
+        self.token = json["auth"]
+        self._inject_token(self.token)
+        return json
+
     # async def async_groups(self) -> List[IkusPescGroup]:
     #     return await self._async_get("/v3/groups")
 
@@ -332,11 +487,11 @@ class ClientError(exceptions.HomeAssistantError):
 
     @property
     def code(self):
-        return self.json["code"]
+        return self.json.get("code", -1)
 
     @property
     def message(self):
-        return self.json["message"]
+        return self.json.get("message", "unknown")
 
     @property
     def cause(self) -> str | None:

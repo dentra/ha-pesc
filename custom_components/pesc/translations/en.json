@@ -15,13 +15,32 @@
     },
     "step": {
       "user": {
+        "title": "Enter account",
+        "data": {
+          "login_type": "Select authorization type"
+        }
+      },
+      "auth": {
         "title": "Connection credentials",
         "data": {
-          "username": "Phone number",
+          "phone": "Phone number",
+          "email": "E-mail address",
           "password": "Password",
           "save_password": "Save password"
         },
         "description": "Enter account credentials"
+      },
+      "send_code": {
+        "title": "Confirmation type",
+        "data": {
+          "verify_type": "Choose confirmation code delivery method"
+        }
+      },
+      "verify_code": {
+        "title": "Confirmation code",
+        "data": {
+          "verify_code": "Enter confirmation code"
+        }
       },
       "reauth_confirm": {
         "title": "Reauthenticate Integration",

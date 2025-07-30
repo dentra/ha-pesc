@@ -1,5 +1,5 @@
 import logging
-from typing import Final
+from typing import Final, override
 
 import async_timeout
 from homeassistant.config_entries import ConfigEntry
@@ -78,20 +78,19 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
                 entry.options[const.CONF_UPDATE_INTERVAL]
             )
 
+    @override
     async def _async_update_data(self):
         await self._relogin_and_fetch(False)
 
     async def _relogin_and_fetch(self, do_relogin: bool):
         try:
-            if do_relogin:
-                await self._relogin()
-            async with async_timeout.timeout(60):
-                await self.api.async_fetch_all()
+            await self._relogin(do_relogin)
+            await self._fetch()
         except pesc_client.ClientAuthError as err:
-            if not do_relogin and const.CONF_PASSWORD in self.config_entry.data:
+            if self._can_relogin(do_relogin):
                 await self._relogin_and_fetch(True)
                 return
-            _LOGGER.debug("ClientAuthError: code=%s, %s", err.code, err.message)
+            _LOGGER.debug("ClientAuthError: %s", err)
             # Raising ConfigEntryAuthFailed will cancel future updates
             # and start a config flow with SOURCE_REAUTH (async_step_reauth)
             raise ConfigEntryAuthFailed from err
@@ -99,16 +98,30 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Ошибка вызова API: %s", err)
             raise UpdateFailed(f"Ошибка вызова API: {err}") from err
 
+    def _can_relogin(self, do_relogin: bool):
+        # уже была попытка
+        if do_relogin:
+            return False
+        # пароль не сохранен
+        if const.CONF_PASSWORD not in self.config_entry.data:
+            return False
+        return True
+
     async def _fetch(self):
         async with async_timeout.timeout(60):
             await self.api.async_fetch_all()
 
-    async def _relogin(self):
+    async def _relogin(self, do_relogin: bool):
+        if not do_relogin:
+            return
         auth = await self.api.async_relogin(
             username=self.config_entry.data[const.CONF_USERNAME],
             password=self.config_entry.data[const.CONF_PASSWORD],
             auth=self.config_entry.data[const.CONF_AUTH],
             login_type=self.config_entry.data[const.CONF_LOGIN_TYPE],
         )
-        data = {**self.config_entry.data, const.CONF_AUTH: auth}
+        data = {
+            **self.config_entry.data,
+            const.CONF_AUTH: self.config_entry.data.get(const.CONF_AUTH) | auth,
+        }
         self.hass.config_entries.async_update_entry(self.config_entry, data=data)

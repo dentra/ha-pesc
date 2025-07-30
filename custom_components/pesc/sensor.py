@@ -1,7 +1,7 @@
-"""Sensor implementaion routines"""
+"""Sensor implementation routines"""
 
 import logging
-from typing import Callable
+from typing import Callable, Optional
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
@@ -67,11 +67,11 @@ async def async_setup_entry(
 
     platform = entity_platform.async_get_current_platform()
 
-    async def async_execute_update_valaue(service_call: ServiceCall) -> ServiceResponse:
+    async def async_execute_update_value(service_call: ServiceCall) -> ServiceResponse:
         # device_id: service_call.data.get(homeassistant.const.ATTR_DEVICE_ID)
         entities = await platform.async_extract_from_service(service_call)
 
-        _LOGGER.debug("async_execute_update_valaue %s", repr(service_call))
+        _LOGGER.debug("async_execute_update_value %s", repr(service_call))
 
         if not entities:
             raise HomeAssistantError("Ни одной цели не выбрано")
@@ -101,7 +101,7 @@ async def async_setup_entry(
 
         if len(entities) != len(values):
             raise HomeAssistantError(
-                "Количество целей должно соответсвовать количеству сущностей"
+                "Количество целей должно соответствовать количеству сущностей"
             )
 
         entity: _PescMeterSensor = entities[0]
@@ -118,7 +118,7 @@ async def async_setup_entry(
     hass.services.async_register(
         const.DOMAIN,
         const.SERVICE_UPDATE_VALUE,
-        async_execute_update_valaue,
+        async_execute_update_value,
         cv.make_entity_service_schema(service_schema),
         SupportsResponse.OPTIONAL,
     )
@@ -379,7 +379,7 @@ class PescRateSensor(_PescMeterSensor):
                     )
 
     @property
-    def native_value(self) -> float | str | None:
+    def native_value(self) -> Optional[float | str]:
         """Return the value of the sensor."""
         tariff = self.coordinator.api.tariff(self.meter)
         if tariff is None:

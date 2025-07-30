@@ -28,7 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _marker(
-    marker: vol.Marker, key: str, options: Dict[str, Any], default: Any | None = None
+    marker: vol.Marker, key: str, options: Dict[str, Any], default: Optional[Any] = None
 ):
     # if default is None:
     #     return marker(key)
@@ -42,14 +42,14 @@ def _marker(
 
 
 def required(
-    key: str, options: Dict[str, Any], default: Any | None = None
+    key: str, options: Dict[str, Any], default: Optional[Any] = None
 ) -> vol.Required:
     """Return vol.Required."""
     return _marker(vol.Required, key, options, default)
 
 
 def optional(
-    key: str, options: Dict[str, Any], default: Any | None = None
+    key: str, options: Dict[str, Any], default: Optional[Any] = None
 ) -> vol.Optional:
     """Return vol.Required."""
     return _marker(vol.Optional, key, options, default)
@@ -62,7 +62,6 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     _api: Optional[pesc_api.PescApi] = None
-    _reauth_entry: Optional[config_entries.ConfigEntry] = None
 
     @property
     def api(self):
@@ -80,53 +79,67 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         return SchemaOptionsFlowHandler(config_entry, OPTIONS_FLOW)
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> FlowResult:
-        self._reauth_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
+        self.context[const.CONF_LOGIN_TYPE] = entry_data.get(
+            const.CONF_LOGIN_TYPE, "phone"
         )
+        self.context[const.CONF_USERNAME] = entry_data[const.CONF_USERNAME]
+        self.context[const.CONF_PASSWORD] = entry_data.get(const.CONF_PASSWORD)
+        self.context[const.CONF_AUTH] = entry_data.get(const.CONF_AUTH)
         return await self.async_step_reauth_confirm()
 
+    async def _reauth_finish(self, auth: dict[str, str]) -> FlowResult:
+        _LOGGER.debug("new auth is %s", auth)
+        reauth_entry = self._get_reauth_entry()
+        self.hass.config_entries.async_update_entry(
+            reauth_entry,
+            data=reauth_entry.data | {const.CONF_AUTH: auth},
+        )
+        await self.hass.config_entries.async_reload(self._reauth_entry_id)
+        return self.async_abort(reason="reauth_successful")
+
     async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Confirm reauth dialog."""
+
         _LOGGER.debug("async_step_reauth_confirm %s", user_input)
 
-        errors = {}
-        assert self._reauth_entry
+        errors: Dict[str, str] = {}
 
         if user_input is not None:
-            data = {}
             try:
-                user_input = {**self._reauth_entry.data, **user_input}
+                if (
+                    not self.context[const.CONF_AUTH]
+                    or pesc_client.PescClient.AUTH_VERIFIED
+                    not in self.context[const.CONF_AUTH]
+                ):
+                    auth = await self.api.async_login(
+                        self.context[const.CONF_USERNAME],
+                        user_input[const.CONF_PASSWORD],
+                        self.context[const.CONF_LOGIN_TYPE],
+                    )
+                    self.context[const.CONF_AUTH] = auth
+                    return await self.async_step_send_code()
+
                 auth = await self.api.async_relogin(
-                    username=user_input[const.CONF_USERNAME],
+                    username=self.context[const.CONF_USERNAME],
                     password=user_input[const.CONF_PASSWORD],
-                    login_type=self._reauth_entry.data[const.CONF_LOGIN_TYPE],
+                    auth=self.context[const.CONF_AUTH],
+                    login_type=self.context[const.CONF_LOGIN_TYPE],
                 )
-                data[const.CONF_AUTH] = auth
-                _LOGGER.debug("new auth is %s", auth)
-                self.hass.config_entries.async_update_entry(
-                    self._reauth_entry,
-                    data=self._reauth_entry.data | data,
-                )
-                await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
+
+                return await self._reauth_finish(auth)
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
-            except pesc_client.ClientAuthError:
-                errors[const.CONF_PASSWORD] = "invalid_auth"
             except pesc_client.ClientError as err:
-                errors["base"] = "api_error"
-                _LOGGER.warning(
-                    "Request %s : code=%s, json=%s",
-                    err.request_info.url,
-                    err.code,
-                    err.json,
-                )
+                errors["base"] = str(err)
+
+        else:
+            user_input = {const.CONF_PASSWORD: self.context[const.CONF_PASSWORD]}
 
         return self.async_show_form(
             description_placeholders={
-                const.CONF_USERNAME: self._reauth_entry.data[const.CONF_USERNAME]
+                const.CONF_USERNAME: self.context[const.CONF_USERNAME]
             },
             step_id="reauth_confirm",
             data_schema=vol.Schema(
@@ -195,7 +208,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 await self.async_set_unique_id(f"{const.DOMAIN}_{slugify(profile_id)}")
                 self._abort_if_unique_id_configured()
 
-                self.context[const.CONF_AUTH] = await self.api.async_login(
+                self.context["auth_transaction"] = await self.api.async_login(
                     username, password, login_type
                 )
 
@@ -206,19 +219,8 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
-            except pesc_client.ClientAuthError:
-                errors["base"] = "invalid_auth"
             except pesc_client.ClientError as err:
-                if err.message:
-                    errors["base"] = err.message
-                else:
-                    errors["base"] = "api_error"
-                _LOGGER.warning(
-                    "Request %s : code=%s, json=%s",
-                    err.request_info.url,
-                    err.code,
-                    err.json,
-                )
+                errors["base"] = str(err)
 
             user_input[login_type] = username
             user_input[const.CONF_PASSWORD] = password
@@ -253,26 +255,17 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         if user_input is not None:
             try:
                 verify_type = user_input["verify_type"]
-                await self.api.async_confirmation_send(
-                    auth=self.context[const.CONF_AUTH], confirmation_type=verify_type
+                auth_transaction = self.context["auth_transaction"]
+                auth_transaction = await self.api.async_login_confirmation_send(
+                    auth_transaction=auth_transaction, confirmation_type=verify_type
                 )
-                self.context["verify_type"] = verify_type
+                self.context["auth_transaction"] = auth_transaction
                 return await self.async_step_verify_code()
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
-            except pesc_client.ClientAuthError:
-                errors["base"] = "invalid_auth"
             except pesc_client.ClientError as err:
-                if err.message:
-                    errors["base"] = err.message
-                else:
-                    errors["base"] = "api_error"
-                _LOGGER.warning(
-                    "Request %s : code=%s, json=%s",
-                    err.request_info.url,
-                    err.code,
-                    err.json,
-                )
+                errors["base"] = str(err)
+
         types = {}
         _LOGGER.debug("step_send_code auth: %s", self.context[const.CONF_AUTH])
         for typ in self.context[const.CONF_AUTH]["types"]:
@@ -295,34 +288,28 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
     async def async_step_verify_code(self, user_input: Optional[Dict[str, Any]] = None):
         errors: Dict[str, str] = {}
         if user_input is not None:
-            data = {}
             try:
-                data[const.CONF_AUTH] = await self.api.async_confirmation_verify(
-                    auth=self.context[const.CONF_AUTH],
-                    confirmation_type=self.context["verify_type"],
+                auth = await self.api.async_login_confirmation_verify(
+                    auth=self.context["auth_transaction"],
                     code=user_input["verify_code"],
                 )
+
+                if self.source == config_entries.SOURCE_REAUTH:
+                    return await self._reauth_finish(auth)
+
+                await self.api.async_fetch_profile()
+
+                data = {}
+                data[const.CONF_AUTH] = auth
                 data[const.CONF_LOGIN_TYPE] = self.context[const.CONF_LOGIN_TYPE]
                 data[const.CONF_USERNAME] = self.context[const.CONF_USERNAME]
                 if const.CONF_PASSWORD in self.context:
                     data[const.CONF_PASSWORD] = self.context[const.CONF_PASSWORD]
-                await self.api.async_fetch_profile()
                 return self.async_create_entry(title=self.api.profile_name, data=data)
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
-            except pesc_client.ClientAuthError:
-                errors["base"] = "invalid_auth"
             except pesc_client.ClientError as err:
-                if err.message:
-                    errors["base"] = err.message
-                else:
-                    errors["base"] = "api_error"
-                _LOGGER.warning(
-                    "Request %s : code=%s, json=%s",
-                    err.request_info.url,
-                    err.code,
-                    err.json,
-                )
+                errors["base"] = str(err)
 
         schema = {vol.Required("verify_code"): str}
         return self.async_show_form(

@@ -1,7 +1,7 @@
 import json as jsonmod
 import logging
 from enum import StrEnum
-from typing import Final, List, TypedDict
+from typing import Final, List, Optional, TypedDict
 
 import aiohttp
 from homeassistant import exceptions
@@ -14,7 +14,7 @@ class AccountAddress(TypedDict):
     value: str
     """
         Значение адреса.
-        Возможно связано с полем identifier, при true возможен идентивикатор
+        Возможно связано с полем identifier, при true возможен идентификатор
     """
 
 
@@ -34,7 +34,7 @@ class AccountTenancy(TypedDict):
 
 class AccountService(TypedDict):
     id: int
-    """Идентиффикатор."""
+    """Идентификатор."""
     providerId: int
     payment: dict
     """
@@ -44,7 +44,7 @@ class AccountService(TypedDict):
 
 class Account(TypedDict):
     id: int
-    """Идентиффикатор."""
+    """Идентификатор."""
 
     alias: str
     """Наименование."""
@@ -122,7 +122,7 @@ class Meter(TypedDict):
 class ProfileName(TypedDict):
     first: str
     last: str
-    patronymic: str | None
+    patronymic: Optional[str]
 
 
 class Profile(TypedDict):
@@ -154,13 +154,27 @@ class Subservice(TypedDict):
     utility: SubserviceUtility
 
 
+class UserAuth(TypedDict):
+    auth: str
+    verified: str
+    access: str
+
+
+class UserAuthTransaction(TypedDict):
+    transactionId: str
+    types: list[str]
+    confirmation_type: str
+
+
 class PescClient:
     BASE_URL: Final = "https://ikus.pesc.ru"
     _API_URL: Final = f"{BASE_URL}/api"
     _APP_URL: Final = f"{BASE_URL}/application"
+    AUTH_AUTH: Final = "auth"
+    AUTH_VERIFIED: Final = "verified"
 
     def __init__(
-        self, session: aiohttp.ClientSession, auth: dict[str, str] | None = None
+        self, session: aiohttp.ClientSession, auth: Optional[UserAuth] = None
     ) -> None:
         self._session = session
         self._headers = {
@@ -168,32 +182,31 @@ class PescClient:
             aiohttp.hdrs.CONTENT_TYPE: "application/json",
             "Customer": "ikus-spb",
         }
-        self.token = auth.get("auth") if auth else None
-        self.verify_token = None
-        self.access_token = None
-        self._inject_token(self.token)
+        self.auth = auth
+        if auth:
+            self._updata_auth(auth)
 
-    def _inject_token(self, auth_token: str):
-        if auth_token:
-            self._headers[aiohttp.hdrs.AUTHORIZATION] = f"Bearer {auth_token}"
+    def _updata_auth(self, auth: UserAuth):
+        self.auth = auth
+        if self.AUTH_AUTH in auth:
+            self._headers[aiohttp.hdrs.AUTHORIZATION] = f"Bearer {auth[self.AUTH_AUTH]}"
 
     async def _async_response_json(
-        self, result: aiohttp.ClientResponse, nobodyrequest: bool = False
+        self, result: aiohttp.ClientResponse, empty_body_request: bool = False
     ):
         try:
             if result.status != 200:
                 if result.status == 404:
                     raise ClientError(
-                        result.request_info,
-                        {"code": 404, "message": f"Not Found: {result.url}"},
+                        result.request_info, code=404, message="Страница не найдена"
                     )
                 json = await result.json()
                 if "code" in json and int(json["code"]) == 5:
                     raise ClientAuthError(result.request_info, json)
                 error = ClientError(result.request_info, json)
-                _LOGGER.error(repr(error))
+                _LOGGER.error("Failed request: %s", error)
                 raise error
-            if nobodyrequest:
+            if empty_body_request:
                 return None
 
             if result.content_type == "application/json":
@@ -207,7 +220,7 @@ class PescClient:
                 return {}
         except aiohttp.ContentTypeError as err:
             raise ClientError(
-                result.request_info, {"code": err.status, "message": err.message}
+                result.request_info, code=err.status, message=err.message
             ) from err
 
     async def _async_get_raw(self, url: str) -> aiohttp.ClientResponse:
@@ -226,18 +239,17 @@ class PescClient:
         return json
 
     async def async_login(self, username: str, password: str) -> str:
+        """deprecated"""
         headers = self._headers.copy()
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers["Captcha"] = "none"
+        payload = {"type": "PHONE", "login": username, "password": password}
         result = await self._session.post(
-            f"{self._API_URL}/v7/users/auth",
-            headers=headers,
-            json={"type": "PHONE", "login": username, "password": password},
+            f"{self._API_URL}/v7/users/auth", headers=headers, json=payload
         )
         json = await self._async_response_json(result)
-        self.token = json["auth"]
-        self._inject_token(self.token)
-        return self.token
+        self._updata_auth(json)
+        return json[self.AUTH_AUTH]
 
     async def async_update_value(
         self,
@@ -302,8 +314,8 @@ class PescClient:
         pass
 
     async def async_users_reauth(
-        self, username: str, password: str, verified_token: str, type: str = "PHONE"
-    ) -> dict[str, str]:
+        self, username: str, password: str, auth: UserAuth, type: str = "PHONE"
+    ) -> UserAuth:
         """
         возвращает json c полями access и auth.
 
@@ -313,32 +325,31 @@ class PescClient:
         пример:
           {access: "...", "auth": "..."}
         """
+        if self.AUTH_VERIFIED not in auth:
+            raise ClientAuthError(None, message="Отсутствует токен verified")
         headers = self._headers.copy()
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers["Captcha"] = "none"
-        headers["Auth-verification"] = verified_token
+        headers["Auth-verification"] = auth[self.AUTH_VERIFIED]
 
+        payload = {"login": username, "password": password, "type": type}
         result = await self._session.post(
-            f"{self._API_URL}/v8/users/auth",
-            headers=headers,
-            json={"login": username, "password": password, "type": type},
+            f"{self._API_URL}/v8/users/auth", headers=headers, json=payload
         )
         # Ожидаемый статус 424
         if result.status != 200:
             raise ClientError(
                 result.request_info,
-                {
-                    "message": f"Неожиданный статус ответа повторной авторизации: {result.status}",
-                },
+                code=result.status,
+                message="Неожиданный статус ответа повторной авторизации",
             )
         json = await result.json()
-        self.token = json["auth"]
-        self._inject_token(self.token)
+        self._updata_auth(json)
         return json
 
     async def async_users_auth(
         self, username: str, password: str, login_type: str = "PHONE"
-    ) -> dict[str, str | list[str]]:
+    ) -> UserAuthTransaction:
         """
         возвращает json c идентификатором транзакции [transactionId] и массивом строк с типами подтверждения [types].
 
@@ -358,21 +369,24 @@ class PescClient:
         # Ожидаемый статус 424
         if result.status != 424:
             json = {
-                "message": f"Неожиданный статус ответа авторизации: {result.status}"
+                "code": result.status,
+                "message": "Неожиданный статус ответа авторизации",
             }
             try:
                 body = await result.json()
                 if body.get("message"):
                     json = body
-            except:
+            except Exception:
                 pass
             raise ClientError(result.request_info, json)
         json = await result.json()
         return json
 
     async def async_users_check_confirmation_send(
-        self, transaction_id: str, confirmation_type="PHONE"
-    ) -> None:
+        self, auth_transaction: UserAuthTransaction, confirmation_type="PHONE"
+    ) -> UserAuthTransaction:
+        transaction_id = auth_transaction["transactionId"]
+
         headers = self._headers.copy()
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers[aiohttp.hdrs.REFERER] = (
@@ -387,20 +401,23 @@ class PescClient:
         # Ожидаемый статус 200
         if result.status != 200:
             json = {
-                "message": f"Неожиданный статус ответа запроса кода подтверждения: {result.status}"
+                "code": result.status,
+                "message": "Неожиданный статус ответа запроса кода подтверждения",
             }
             try:
                 body = await result.json()
                 if body.get("message"):
                     json = body
-            except:
+            except Exception:
                 pass
             raise ClientError(result.request_info, json)
         # тело ответа значения не имеет
+        auth_transaction["confirmation_type"] = confirmation_type.lower()
+        return auth_transaction
 
     async def async_users_check_verification(
-        self, transaction_id: str, code: str, confirmation_type="PHONE"
-    ) -> dict[str, str]:
+        self, auth_transaction: UserAuthTransaction, code: str
+    ) -> UserAuth:
         """
         возвращает json c полями access, auth и verified.
 
@@ -411,6 +428,9 @@ class PescClient:
         пример:
           {access: "...", "auth": "...", "verified": "..."}
         """
+        transaction_id = auth_transaction["transactionId"]
+        confirmation_type = auth_transaction["confirmation_type"]
+
         headers = self._headers.copy()
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers[aiohttp.hdrs.REFERER] = (
@@ -419,29 +439,25 @@ class PescClient:
         headers["Customer"] = "ikus-spb"
 
         result = await self._session.post(
-            f"{self._API_URL}/v7/users/{transaction_id}/{confirmation_type.lower()}/check/verification",
+            f"{self._API_URL}/v7/users/{transaction_id}/{confirmation_type}/check/verification",
             headers=headers,
             json={"code": code},
         )
         # Ожидаемый статус 200
         if result.status != 200:
             json = {
-                "message": f"Неожиданный статус ответа подтверждения кода: {result.status}"
+                "code": result.status,
+                "message": "Неожиданный статус ответа подтверждения кода",
             }
             try:
                 body = await result.json()
                 if body.get("message"):
                     json = body
-            except:
+            except Exception:
                 pass
             raise ClientError(result.request_info, json)
-        # возвращает json c полями access, auth и verified
-        # access: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ7XCJ1c2VySWRcIjpudWxsLFwidG9rZW5JZFwiOjEwNTY2MDU3NjIsXCJpc1N1cGVyVXNlclwiOmZhbHNlLFwiZXhwaXJhdGlvblRpbWVcIjpcIjI5LjA3LjIwMjUgMTQ6NTg6MjdcIn0iLCJleHAiOjE3NTM3OTAzMDcsImlhdCI6MTc1Mzc4NjcwN30.De216xpCAyqA2hmWg3NyqYOPxb1-_sEaXwl_iQOTUDQTLTsDgRkyJ-fI4xHbltIxkO1yV5-26ANdWdDc4ffRZg"
-        # auth: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ7XCJ1c2VySWRcIjo2MDM1MzYsXCJ0b2tlbklkXCI6MTA1NjYwNTc2MixcImlzU3VwZXJVc2VyXCI6ZmFsc2UsXCJleHBpcmF0aW9uVGltZVwiOlwiMjkuMDcuMjAyNSAxNDoyODoyN1wifSIsImV4cCI6MTc1Mzc4ODUwNywiaWF0IjoxNzUzNzg2NzA3fQ.JVLbG20smQQy-F0ndCtS9qnT3JbX2z6i76xQHxJLThhvoS3OFYgUkqv34H6Ftwf79f6bEMWG4hI6QHGh0LQWwQ"
-        # verified: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ7XCJ1c2VySWRcIjo2MDM1MzYsXCJ0b2tlbklkXCI6bnVsbCxcImlzU3VwZXJVc2VyXCI6ZmFsc2UsXCJleHBpcmF0aW9uVGltZVwiOlwiMjQuMDcuMjAyNiAxMzo1ODoyN1wifSIsImV4cCI6MTc4NDg5MDcwNywiaWF0IjoxNzUzNzg2NzA3fQ.L3sKutbc32z2W0AFxu5jxjHfhfBd5HeoeK9_Kd65z5wKWvphR6hTP4_fIn1m5KQKFQhrxA7NT75nNabQ0I-Xqg"
         json = await result.json()
-        self.token = json["auth"]
-        self._inject_token(self.token)
+        self._updata_auth(json)
         return json
 
     # async def async_groups(self) -> List[IkusPescGroup]:
@@ -480,36 +496,54 @@ class PescClient:
 
 
 class ClientError(exceptions.HomeAssistantError):
-    def __init__(self, request_info: aiohttp.RequestInfo, json: dict) -> None:
+    def __init__(
+        self,
+        info: aiohttp.RequestInfo,
+        json: Optional[dict] = None,
+        code: Optional[int] = None,
+        message: str = "",
+    ) -> None:
         super().__init__(self.__class__.__name__)
-        self.request_info = request_info
-        self.json = json
+        self.info = info
+        self.json = json if json else {}
+        if code is not None:
+            json["code"] = code
+        if message:
+            json["message"] = message
 
     @property
-    def code(self):
+    def code(self) -> int:
         return self.json.get("code", -1)
 
     @property
-    def message(self):
-        return self.json.get("message", "unknown")
+    def message(self) -> str:
+        return self.json.get("message", "Неизвестная ошибка")
 
     @property
-    def cause(self) -> str | None:
-        return self.json.get("cause")
+    def cause(self) -> str:
+        return self.json.get("cause", "")
 
     def __repr__(self) -> str:
         res = self.__class__.__name__
         res += "["
-        res += f"url={self.request_info.url}"
-        res += f", code={self.code}"
-        res += f", message={self.message}"
-        if self.cause is not None:
-            res += f", cause={self.cause}"
+        if self.info:
+            res += f"url={self.info.url}"
+        if "code" in self.json:
+            res += f", code={self.json['code']}"
+        if "message" in self.json:
+            res += f", message={self.json['message']}"
+        if "cause" in self.json:
+            res += f", cause={self.json['cause']}"
         res += "]"
         return res
 
     def __str__(self) -> str:
-        return self.message
+        res = self.message
+        if "code" in self.json:
+            res = f"{res}, код {self.json['code']}"
+        if self.info:
+            res = f"{res} ({self.info.method} {self.info.url})"
+        return res
 
 
 class ClientAuthError(ClientError):

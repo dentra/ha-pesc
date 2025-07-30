@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Final, List
+from typing import Dict, List, Optional
 
 from homeassistant.util import slugify
 
@@ -138,7 +138,7 @@ class Tariff:
     name: str
     """ Например: "Холодное водоснабжение" или "Горячее водоснабжение" и т.д. """
 
-    kind: str | None
+    kind: Optional[str]
     """ Тип, например: "Двухтарифный" """
 
     rates: list[TariffRate]
@@ -154,7 +154,7 @@ class Tariff:
             + f"[name={self.name}, kind={self.kind}, rates={self.rates}]"
         )
 
-    def rate(self, meter: MeterInd) -> TariffRate | None:
+    def rate(self, meter: MeterInd) -> Optional[TariffRate]:
         if len(self.rates) == 0:
             return None
 
@@ -194,7 +194,7 @@ class Tariff:
 
 
 class PescApi:
-    _profile: pesc_client.Profile | None = None
+    _profile: Optional[pesc_client.Profile] = None
     _meters: List[MeterInd] = []
     _groups: List[Group] = []
     _tariffs: Dict[int, list[Tariff]] = {}
@@ -206,7 +206,7 @@ class PescApi:
 
     async def async_login(
         self, username: str, password: str, login_type: str
-    ) -> dict[str, str | list[str]]:
+    ) -> pesc_client.UserAuthTransaction:
         _LOGGER.debug("Login %s", username)
         return await self.client.async_users_auth(
             username, password, login_type.upper()
@@ -216,32 +216,40 @@ class PescApi:
         self,
         username: str,
         password: str,
-        auth: dict[str, str | list[str]],
+        auth: pesc_client.UserAuth,
         login_type: str,
-    ) -> dict[str, str | list[str]]:
+    ) -> pesc_client.UserAuth:
         _LOGGER.debug("Relogin %s", username)
         return await self.client.async_users_reauth(
-            username, password, auth["verified"], login_type.upper()
+            username, password, auth, login_type.upper()
         )
 
-    async def async_confirmation_send(
-        self, auth: dict[str, str | list[str]], confirmation_type: str
-    ):
-        transaction_id = auth["transactionId"]
-        _LOGGER.debug("Send confirmation %s: %s", confirmation_type, transaction_id)
+    async def async_login_confirmation_send(
+        self, auth_transaction: pesc_client.UserAuthTransaction, confirmation_type: str
+    ) -> pesc_client.UserAuthTransaction:
+        _LOGGER.debug(
+            "Send confirmation %s: %s",
+            confirmation_type,
+            auth_transaction["transactionId"],
+        )
         return await self.client.async_users_check_confirmation_send(
-            transaction_id=transaction_id, confirmation_type=confirmation_type
+            auth_transaction=auth_transaction, confirmation_type=confirmation_type
         )
 
-    async def async_confirmation_verify(
-        self, auth: dict[str, str | list[str]], confirmation_type: str, code: str
+    async def async_login_confirmation_verify(
+        self,
+        auth_transaction: pesc_client.UserAuthTransaction,
+        code: str,
     ):
-        transaction_id = auth["transactionId"]
-        _LOGGER.debug("Verify confirmation %s: %s", confirmation_type, transaction_id)
+        transaction_id = auth_transaction["transactionId"]
+        _LOGGER.debug(
+            "Verify confirmation %s: %s",
+            auth_transaction["confirmation_type"],
+            transaction_id,
+        )
         return await self.client.async_users_check_verification(
-            transaction_id=transaction_id,
+            auth_transaction=auth_transaction,
             code=code,
-            confirmation_type=confirmation_type,
         )
 
     async def async_update_value(
@@ -298,7 +306,7 @@ class PescApi:
             self._load_meters(acc),
             self._load_tariffs(acc),
         )
-        # load subservices after meters to store only requred subservices
+        # load subservices after meters to store only required subservices
         await self._load_subservices(acc)
 
     async def _load_reading_types(self, acc: Account):
@@ -402,7 +410,7 @@ class PescApi:
         self._groups = (Group(group) for group in groups)
 
     @property
-    def profile_id(self) -> str | None:
+    def profile_id(self) -> Optional[str]:
         if not self._profile:
             return None
         phone = self._profile["phone"]
@@ -413,7 +421,7 @@ class PescApi:
         return slugify(phone)
 
     @property
-    def profile_name(self) -> str | None:
+    def profile_name(self) -> Optional[str]:
         if not self._profile:
             return None
         name = self._profile["name"]
@@ -438,7 +446,7 @@ class PescApi:
     def groups(self) -> List[Group]:
         return self._groups
 
-    def tariff(self, ind: MeterInd) -> Tariff | None:
+    def tariff(self, ind: MeterInd) -> Optional[Tariff]:
         subservice = self.subservice(ind.meter.subservice_id)
         if not subservice:
             return None
@@ -448,11 +456,11 @@ class PescApi:
                 return tariff
         return None
 
-    def find_ind(self, ind_id: str) -> MeterInd | None:
+    def find_ind(self, ind_id: str) -> Optional[MeterInd]:
         for ind in self.meters:
             if ind.id == ind_id:
                 return ind
         return None
 
-    def subservice(self, subservice_id: int) -> pesc_client.Subservice | None:
+    def subservice(self, subservice_id: int) -> Optional[pesc_client.Subservice]:
         return self._subservices.get(subservice_id, None)

@@ -304,8 +304,7 @@ class PescMeterSensor(_PescMeterSensor):
         do_relogin: bool,
     ) -> ServiceResponse:
         try:
-            if do_relogin:
-                await self.coordinator._relogin()
+            await self.coordinator._relogin(do_relogin)
             payload = await self.api.async_update_value(self.meter, values)
             _LOGGER.debug('[%s] Update "%s" success', self.entity_id, self.name)
             return {
@@ -315,8 +314,7 @@ class PescMeterSensor(_PescMeterSensor):
             }
         except pesc_client.ClientAuthError as err:
             if not do_relogin:
-                await self.relogin_and_update_(values, return_response, True)
-                return None
+                return await self.relogin_and_update_(values, return_response, True)
             if not return_response:
                 raise ConfigEntryAuthFailed from err
             return {"code": err.code, "message": err.message}

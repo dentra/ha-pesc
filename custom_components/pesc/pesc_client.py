@@ -1,7 +1,7 @@
 import json as jsonmod
 import logging
 from enum import StrEnum
-from typing import Final, List, Optional, TypedDict
+from typing import Any, Final, List, Optional, TypedDict
 
 import aiohttp
 from homeassistant import exceptions
@@ -280,7 +280,7 @@ class PescClient:
         await self._async_response_json(result, True)
 
     @property
-    async def async_config(self):
+    async def async_config(self) -> dict[str, Any]:
         url = f"{self.BASE_URL}/config.json"
         result = await self._session.get(url)
         return await self._async_response_json(result)

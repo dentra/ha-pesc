@@ -6,12 +6,12 @@
       "cannot_connect": "Ошибка подключения к серверу",
       "invalid_auth": "Ошибка аутентификации",
       "invalid_username": "Неверное имя пользователя",
-      "invalid_password": "Неверный пароль",
-      "api_error": "Ошибка API"
+      "invalid_password": "Неверный пароль"
     },
     "abort": {
       "already_configured": "Такой аккаунт уже существует",
-      "reauth_successful": "Переподключение успешно"
+      "reauth_successful": "Переподключение успешно",
+      "service_unavailable": "Сервис ПСК/ЕИРЦ временно недоступен.\n\nПожалуйста поворите попытку позже."
     },
     "step": {
       "user": {
@@ -59,6 +59,21 @@
           "diagnostic_sensors": "Сенсоры в диагностическом режиме",
           "rates_sensors": "Дополнительные сенсоры тарифов"
         }
+      }
+    }
+  },
+  "selector": {
+    "login_types": {
+      "options": {
+        "phone": "Номер телефона",
+        "email": "Электронная почта"
+      }
+    },
+    "verify_types": {
+      "options": {
+        "PHONE": "По SMS",
+        "EMAIL": "По электронной почте",
+        "FLASHCALL": "По звонку"
       }
     }
   },

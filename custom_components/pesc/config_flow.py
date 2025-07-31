@@ -149,16 +149,24 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             self.context[_LOGIN_TYPE] = user_input[_LOGIN_TYPE]
             return await self.async_step_auth()
 
-        schema = {
-            vol.Required(_LOGIN_TYPE, default=_LOGIN_TYPE_PHONE): vol.In(
-                {
-                    _LOGIN_TYPE_PHONE: "Номер телефона",
-                    _LOGIN_TYPE_EMAIL: "Электронная почта",
-                }
-            ),
-        }
-
-        return self.async_show_form(step_id=_STEP_USER, data_schema=vol.Schema(schema))
+        try:
+            cfg = await self.api.client.async_config()
+            auth_type = cfg["users"]["authentication"]["type"]
+            schema = {
+                vol.Required(
+                    _LOGIN_TYPE, default=auth_type["default"]
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=auth_type["available"],
+                        translation_key="login_types",
+                    )
+                )
+            }
+            return self.async_show_form(
+                step_id=_STEP_USER, data_schema=vol.Schema(schema)
+            )
+        except Exception:
+            return self.async_abort(reason="service_unavailable")
 
     async def async_step_auth(self, user_input: Optional[Dict[str, Any]] = None):
         errors: Dict[str, str] = {}
@@ -167,7 +175,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
         if user_input is not None:
             password: str = user_input.get(_PASSWORD, "")
-            username: str = user_input.get(_USERNAME, "")
+            username: str = user_input.get(login_type, "")
             username = username.replace(" ", "")
             if login_type == _LOGIN_TYPE_PHONE:
                 if username[0] == "8":
@@ -212,11 +220,11 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             except pesc_client.ClientError as err:
                 errors["base"] = str(err)
 
-            user_input[_USERNAME] = username
+            user_input[login_type] = username
             user_input[_PASSWORD] = password
 
         schema = {
-            vol.Required(_USERNAME): selector.TextSelector(
+            vol.Required(login_type): selector.TextSelector(
                 selector.TextSelectorConfig(
                     type=selector.TextSelectorType.TEL
                     if login_type == _LOGIN_TYPE_PHONE
@@ -276,9 +284,14 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             types[typ] = f"По {lab}"
 
         schema = {
-            vol.Required(_VERIFY_TYPE, default=pesc_client.CONFIRMATION_SMS): vol.In(
-                types
-            )
+            vol.Required(
+                _VERIFY_TYPE, default=pesc_client.CONFIRMATION_SMS
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=self.context[_AUTH_TRANSACTION]["types"],
+                    translation_key="verify_types",
+                )
+            ),
         }
 
         return self.async_show_form(

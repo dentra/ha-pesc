@@ -6,12 +6,12 @@
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
       "invalid_username": "Invalid username",
-      "invalid_password": "Invalid password",
-      "api_error": "API Error"
+      "invalid_password": "Invalid password"
     },
     "abort": {
       "already_configured": "Account is already configured",
-      "reauth_successful": "Re-authentication was successful"
+      "reauth_successful": "Re-authentication was successful",
+      "service_unavailable": "PSC service temporary unavailable.\n\nPlease try later."
     },
     "step": {
       "user": {
@@ -59,6 +59,21 @@
           "diagnostic_sensors": "Sensors in diagnostic mode",
           "rates_sensors": "Additional rates sensors"
         }
+      }
+    }
+  },
+  "selector": {
+    "login_types": {
+      "options": {
+        "phone": "Phone number",
+        "email": "E-mail address"
+      }
+    },
+    "verify_types": {
+      "options": {
+        "PHONE": "By SMS",
+        "EMAIL": "By e-mail",
+        "FLASHCALL": "By phone call"
       }
     }
   }

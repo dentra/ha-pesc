@@ -102,28 +102,26 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
         if user_input is not None:
             try:
-                if self.api.can_reauth():
-                    auth_transaction = await self.api.async_login(
+                if self.api.can_reauth(self.context[_AUTH]):
+                    auth = await self.api.async_relogin(
                         username=self.context[_USERNAME],
                         password=user_input[_PASSWORD],
+                        auth=self.context[_AUTH],
                         login_type=self.context[_LOGIN_TYPE],
                     )
-                    self.context[_AUTH_TRANSACTION] = auth_transaction
-                    return await self.async_step_send_code()
+                    return await self._reauth_finish(auth)
 
-                auth = await self.api.async_relogin(
+                auth_transaction = await self.api.async_login(
                     username=self.context[_USERNAME],
                     password=user_input[_PASSWORD],
-                    auth=self.context[_AUTH],
                     login_type=self.context[_LOGIN_TYPE],
                 )
-
-                return await self._reauth_finish(auth)
+                self.context[_AUTH_TRANSACTION] = auth_transaction
+                return await self.async_step_send_code()
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
             except pesc_client.ClientError as err:
                 errors["base"] = str(err)
-
         else:
             user_input = {_PASSWORD: self.context[_PASSWORD]}
 
@@ -292,7 +290,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         if user_input is not None:
             try:
                 auth = await self.api.async_login_confirmation_verify(
-                    auth=self.context[_AUTH_TRANSACTION],
+                    auth_transaction=self.context[_AUTH_TRANSACTION],
                     code=user_input[_VERIFY_CODE],
                 )
 

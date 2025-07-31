@@ -519,9 +519,9 @@ class ClientError(exceptions.HomeAssistantError):
         self.info = info
         self.json = json if json else {}
         if code is not None:
-            json["code"] = code
+            self.json["code"] = code
         if message:
-            json["message"] = message
+            self.json["message"] = message
 
     @property
     def code(self) -> int:

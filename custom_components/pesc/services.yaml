@@ -20,5 +20,5 @@ update_value:
         number:
           min: 1
           max: 999999
-          unit_of_measurement: kWh
+#          unit_of_measurement: kWh
           mode: box

@@ -212,6 +212,9 @@ class PescApi:
             username, password, login_type.upper()
         )
 
+    def can_reauth(self, auth: pesc_client.UserAuth) -> bool:
+        return self.client.can_reauth(auth)
+
     async def async_relogin(
         self,
         username: str,

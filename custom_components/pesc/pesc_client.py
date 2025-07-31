@@ -8,6 +8,17 @@ from homeassistant import exceptions
 
 _LOGGER = logging.getLogger(__name__)
 
+LOGIN_TYPE_PHONE: Final = "phone"
+LOGIN_TYPE_EMAIL: Final = "email"
+
+AUTH_AUTH: Final = "auth"
+AUTH_VERIFIED: Final = "verified"
+AUTH_ACCESS: Final = "access"
+
+CONFIRMATION_SMS: Final = "PHONE"
+CONFIRMATION_EMAIL: Final = "EMAIL"
+CONFIRMATION_CALL: Final = "FLASHCALL"
+
 
 class AccountAddress(TypedDict):
     identifier: bool
@@ -170,8 +181,6 @@ class PescClient:
     BASE_URL: Final = "https://ikus.pesc.ru"
     _API_URL: Final = f"{BASE_URL}/api"
     _APP_URL: Final = f"{BASE_URL}/application"
-    AUTH_AUTH: Final = "auth"
-    AUTH_VERIFIED: Final = "verified"
 
     def __init__(
         self, session: aiohttp.ClientSession, auth: Optional[UserAuth] = None
@@ -188,8 +197,8 @@ class PescClient:
 
     def _updata_auth(self, auth: UserAuth):
         self.auth = auth
-        if self.AUTH_AUTH in auth:
-            self._headers[aiohttp.hdrs.AUTHORIZATION] = f"Bearer {auth[self.AUTH_AUTH]}"
+        if AUTH_AUTH in auth:
+            self._headers[aiohttp.hdrs.AUTHORIZATION] = f"Bearer {auth[AUTH_AUTH]}"
 
     async def _async_response_json(
         self, result: aiohttp.ClientResponse, empty_body_request: bool = False
@@ -249,7 +258,7 @@ class PescClient:
         )
         json = await self._async_response_json(result)
         self._updata_auth(json)
-        return json[self.AUTH_AUTH]
+        return json[AUTH_AUTH]
 
     async def async_update_value(
         self,
@@ -313,6 +322,9 @@ class PescClient:
         # payload: {"access":"...","auth":"...","verified":"..."}
         pass
 
+    def can_reauth(self, auth: UserAuth) -> bool:
+        return AUTH_VERIFIED in auth
+
     async def async_users_reauth(
         self, username: str, password: str, auth: UserAuth, type: str = "PHONE"
     ) -> UserAuth:
@@ -325,12 +337,12 @@ class PescClient:
         пример:
           {access: "...", "auth": "..."}
         """
-        if self.AUTH_VERIFIED not in auth:
+        if not self.can_reauth(auth):
             raise ClientAuthError(None, message="Отсутствует токен verified")
         headers = self._headers.copy()
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers["Captcha"] = "none"
-        headers["Auth-verification"] = auth[self.AUTH_VERIFIED]
+        headers["Auth-verification"] = auth[AUTH_VERIFIED]
 
         payload = {"login": username, "password": password, "type": type}
         result = await self._session.post(

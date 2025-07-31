@@ -51,6 +51,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old entry."""
+
+    _LOGGER.debug("Migrating configuration from version %s", config_entry.version)
+
+    if config_entry.version == 1:
+        new_data = {
+            **config_entry.data,
+            const.CONF_AUTH: {pesc_client.AUTH_AUTH: config_entry.data.get("token")},
+            const.CONF_LOGIN_TYPE: pesc_client.LOGIN_TYPE_PHONE,
+        }
+
+        hass.config_entries.async_update_entry(
+            config_entry, data=new_data, version=const.CONFIG_VERSION
+        )
+
+    _LOGGER.debug(
+        "Migration to configuration version %s successful", config_entry.version
+    )
+
+    return True
+
+
 # https://developers.home-assistant.io/docs/integration_fetching_data/#polling-api-endpoints
 class PescDataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
@@ -63,14 +86,10 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
 
         _LOGGER.debug("Initialize updater for %s", entry.title)
 
-        auth = (
-            entry.data[const.CONF_AUTH]
-            if const.CONF_AUTH in entry.data
-            else {"auth": entry.data[const.CONF_TOKEN]}
-        )
-
         self.api = pesc_api.PescApi(
-            pesc_client.PescClient(async_get_clientsession(hass), auth)
+            pesc_client.PescClient(
+                async_get_clientsession(hass), entry.data[const.CONF_AUTH]
+            )
         )
 
         if const.CONF_UPDATE_INTERVAL in entry.options:

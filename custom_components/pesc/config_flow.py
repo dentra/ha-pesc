@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Final, Optional
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -26,33 +26,29 @@ from . import const, pesc_api, pesc_client
 
 _LOGGER = logging.getLogger(__name__)
 
+_AUTH: Final = const.CONF_AUTH
+_USERNAME: Final = const.CONF_USERNAME
+_PASSWORD: Final = const.CONF_PASSWORD
+_LOGIN_TYPE: Final = const.CONF_LOGIN_TYPE
+_AUTH_TRANSACTION: Final = "auth_transaction"
+_SAVE_PWD: Final = "save_password"
+_VERIFY_CODE: Final = "verify_code"
+_VERIFY_TYPE: Final = "verify_type"
+_LOGIN_TYPE_PHONE: Final = pesc_client.LOGIN_TYPE_PHONE
+_LOGIN_TYPE_EMAIL: Final = pesc_client.LOGIN_TYPE_EMAIL
 
-def _marker(
-    marker: vol.Marker, key: str, options: Dict[str, Any], default: Optional[Any] = None
-):
-    # if default is None:
-    #     return marker(key)
+_STEP_REAUTH_CONFIRM: Final = "reauth_confirm"
+_STEP_USER: Final = "user"
+_STEP_AUTH: Final = "auth"
+_STEP_SEND_CODE: Final = "send_code"
+_STEP_VERIFY_CODE: Final = "verify_code"
 
-    if isinstance(options, dict) and key in options:
-        suggested_value = options[key]
-    else:
-        suggested_value = default
+_FLOW_ERROR_INVALID_USERNAME: Final = "invalid_username"
+_FLOW_ERROR_INVALID_PASSWORD: Final = "invalid_password"
 
-    return marker(key, description={"suggested_value": suggested_value})
-
-
-def required(
-    key: str, options: Dict[str, Any], default: Optional[Any] = None
-) -> vol.Required:
-    """Return vol.Required."""
-    return _marker(vol.Required, key, options, default)
-
-
-def optional(
-    key: str, options: Dict[str, Any], default: Optional[Any] = None
-) -> vol.Optional:
-    """Return vol.Required."""
-    return _marker(vol.Optional, key, options, default)
+_AUTOCOMPLETE_TEL: Final = "tel"
+_AUTOCOMPLETE_EMAIL: Final = "email"
+_AUTOCOMPLETE_PASSWORD: Final = "current-password"
 
 
 class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
@@ -79,20 +75,18 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         return SchemaOptionsFlowHandler(config_entry, OPTIONS_FLOW)
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> FlowResult:
-        self.context[const.CONF_LOGIN_TYPE] = entry_data.get(
-            const.CONF_LOGIN_TYPE, "phone"
-        )
-        self.context[const.CONF_USERNAME] = entry_data[const.CONF_USERNAME]
-        self.context[const.CONF_PASSWORD] = entry_data.get(const.CONF_PASSWORD)
-        self.context[const.CONF_AUTH] = entry_data.get(const.CONF_AUTH)
+        self.context[_LOGIN_TYPE] = entry_data[_LOGIN_TYPE]
+        self.context[_AUTH] = entry_data[_AUTH]
+        self.context[_USERNAME] = entry_data[_USERNAME]
+        self.context[_PASSWORD] = entry_data.get(_PASSWORD)
         return await self.async_step_reauth_confirm()
 
-    async def _reauth_finish(self, auth: dict[str, str]) -> FlowResult:
+    async def _reauth_finish(self, auth: pesc_client.UserAuth) -> FlowResult:
         _LOGGER.debug("new auth is %s", auth)
         reauth_entry = self._get_reauth_entry()
         self.hass.config_entries.async_update_entry(
             reauth_entry,
-            data=reauth_entry.data | {const.CONF_AUTH: auth},
+            data=reauth_entry.data | {_AUTH: auth},
         )
         await self.hass.config_entries.async_reload(self._reauth_entry_id)
         return self.async_abort(reason="reauth_successful")
@@ -108,24 +102,20 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
         if user_input is not None:
             try:
-                if (
-                    not self.context[const.CONF_AUTH]
-                    or pesc_client.PescClient.AUTH_VERIFIED
-                    not in self.context[const.CONF_AUTH]
-                ):
-                    auth = await self.api.async_login(
-                        self.context[const.CONF_USERNAME],
-                        user_input[const.CONF_PASSWORD],
-                        self.context[const.CONF_LOGIN_TYPE],
+                if self.api.can_reauth():
+                    auth_transaction = await self.api.async_login(
+                        username=self.context[_USERNAME],
+                        password=user_input[_PASSWORD],
+                        login_type=self.context[_LOGIN_TYPE],
                     )
-                    self.context[const.CONF_AUTH] = auth
+                    self.context[_AUTH_TRANSACTION] = auth_transaction
                     return await self.async_step_send_code()
 
                 auth = await self.api.async_relogin(
-                    username=self.context[const.CONF_USERNAME],
-                    password=user_input[const.CONF_PASSWORD],
-                    auth=self.context[const.CONF_AUTH],
-                    login_type=self.context[const.CONF_LOGIN_TYPE],
+                    username=self.context[_USERNAME],
+                    password=user_input[_PASSWORD],
+                    auth=self.context[_AUTH],
+                    login_type=self.context[_LOGIN_TYPE],
                 )
 
                 return await self._reauth_finish(auth)
@@ -135,22 +125,22 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 errors["base"] = str(err)
 
         else:
-            user_input = {const.CONF_PASSWORD: self.context[const.CONF_PASSWORD]}
+            user_input = {_PASSWORD: self.context[_PASSWORD]}
+
+        schema = {
+            vol.Required(_PASSWORD): selector.TextSelector(
+                selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.PASSWORD,
+                    autocomplete=_AUTOCOMPLETE_PASSWORD,
+                )
+            )
+        }
 
         return self.async_show_form(
-            description_placeholders={
-                const.CONF_USERNAME: self.context[const.CONF_USERNAME]
-            },
-            step_id="reauth_confirm",
-            data_schema=vol.Schema(
-                {
-                    required(const.CONF_PASSWORD, user_input): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.PASSWORD,
-                            autocomplete="current-password",
-                        )
-                    ),
-                }
+            description_placeholders={_USERNAME: self.context[_USERNAME]},
+            step_id=_STEP_REAUTH_CONFIRM,
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(schema), user_input
             ),
             errors=errors,
         )
@@ -158,30 +148,30 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None):
         """Handle the initial step."""
         if user_input is not None:
-            self.context[const.CONF_LOGIN_TYPE] = user_input[const.CONF_LOGIN_TYPE]
+            self.context[_LOGIN_TYPE] = user_input[_LOGIN_TYPE]
             return await self.async_step_auth()
 
         schema = {
-            vol.Required(const.CONF_LOGIN_TYPE, default="phone"): vol.In(
+            vol.Required(_LOGIN_TYPE, default=_LOGIN_TYPE_PHONE): vol.In(
                 {
-                    "phone": "Номер телефона",
-                    "email": "Электронная почта",
+                    _LOGIN_TYPE_PHONE: "Номер телефона",
+                    _LOGIN_TYPE_EMAIL: "Электронная почта",
                 }
             ),
         }
 
-        return self.async_show_form(step_id="user", data_schema=vol.Schema(schema))
+        return self.async_show_form(step_id=_STEP_USER, data_schema=vol.Schema(schema))
 
     async def async_step_auth(self, user_input: Optional[Dict[str, Any]] = None):
         errors: Dict[str, str] = {}
 
-        login_type: str = self.context[const.CONF_LOGIN_TYPE]
+        login_type: str = self.context[_LOGIN_TYPE]
 
         if user_input is not None:
-            username: str = user_input.get(login_type, "")
-            password: str = user_input.get(const.CONF_PASSWORD, "")
+            password: str = user_input.get(_PASSWORD, "")
+            username: str = user_input.get(_USERNAME, "")
             username = username.replace(" ", "")
-            if login_type == "phone":
+            if login_type == _LOGIN_TYPE_PHONE:
                 if username[0] == "8":
                     username = f"+7{username[1:]}"
                 username = username.replace("-", "")
@@ -189,32 +179,34 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 username = username.replace(")", "")
 
             try:
-                if login_type == "phone" and (
+                if login_type == _LOGIN_TYPE_PHONE and (
                     username[0] != "+" or len(username) != len("+71234567890")
                 ):
-                    raise ConfigFlowError("invalid_username", const.CONF_USERNAME)
+                    raise ConfigFlowError(_FLOW_ERROR_INVALID_USERNAME, _USERNAME)
 
-                if login_type == "email" and (
+                if login_type == _LOGIN_TYPE_EMAIL and (
                     username.find("@") == -1 or len(username) < len("a@b.cd")
                 ):
-                    raise ConfigFlowError("invalid_username", const.CONF_USERNAME)
+                    raise ConfigFlowError(_FLOW_ERROR_INVALID_USERNAME, _USERNAME)
 
-                self._async_abort_entries_match({const.CONF_USERNAME: username})
+                self._async_abort_entries_match({_USERNAME: username})
 
                 if len(password) < 3:
-                    raise ConfigFlowError("invalid_password", const.CONF_PASSWORD)
+                    raise ConfigFlowError(_FLOW_ERROR_INVALID_PASSWORD, _PASSWORD)
 
-                profile_id = username[1:] if login_type == "phone" else username
+                profile_id = (
+                    username[1:] if login_type == _LOGIN_TYPE_PHONE else username
+                )
                 await self.async_set_unique_id(f"{const.DOMAIN}_{slugify(profile_id)}")
                 self._abort_if_unique_id_configured()
 
-                self.context["auth_transaction"] = await self.api.async_login(
+                self.context[_AUTH_TRANSACTION] = await self.api.async_login(
                     username, password, login_type
                 )
 
-                self.context[const.CONF_USERNAME] = username
-                if user_input.get(const.CONF_SAVE_PWD, True):
-                    self.context[const.CONF_PASSWORD] = password
+                self.context[_USERNAME] = username
+                if user_input.get(_SAVE_PWD, True):
+                    self.context[_PASSWORD] = password
                 return await self.async_step_send_code()
 
             except ConfigFlowError as err:
@@ -222,44 +214,50 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             except pesc_client.ClientError as err:
                 errors["base"] = str(err)
 
-            user_input[login_type] = username
-            user_input[const.CONF_PASSWORD] = password
+            user_input[_USERNAME] = username
+            user_input[_PASSWORD] = password
 
         schema = {
-            required(login_type, user_input): selector.TextSelector(
+            vol.Required(_USERNAME): selector.TextSelector(
                 selector.TextSelectorConfig(
                     type=selector.TextSelectorType.TEL
-                    if login_type == "phone"
+                    if login_type == _LOGIN_TYPE_PHONE
                     else selector.TextSelectorType.EMAIL,
-                    autocomplete="tel" if login_type == "phone" else "email",
+                    autocomplete=_AUTOCOMPLETE_TEL
+                    if login_type == _LOGIN_TYPE_PHONE
+                    else _AUTOCOMPLETE_EMAIL,
                 )
             ),
-            required(const.CONF_PASSWORD, user_input): selector.TextSelector(
+            vol.Required(_PASSWORD): selector.TextSelector(
                 selector.TextSelectorConfig(
                     type=selector.TextSelectorType.PASSWORD,
-                    autocomplete="current-password",
+                    autocomplete=_AUTOCOMPLETE_PASSWORD,
                 )
             ),
             vol.Optional(
-                const.CONF_SAVE_PWD,
-                default=(user_input or {}).get(const.CONF_SAVE_PWD, True),
+                _SAVE_PWD,
+                default=(user_input or {}).get(_SAVE_PWD, True),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
         }
 
         return self.async_show_form(
-            step_id="auth", data_schema=vol.Schema(schema), errors=errors
+            step_id=_STEP_AUTH,
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(schema), user_input
+            ),
+            errors=errors,
         )
 
     async def async_step_send_code(self, user_input: Optional[Dict[str, Any]] = None):
         errors: Dict[str, str] = {}
         if user_input is not None:
             try:
-                verify_type = user_input["verify_type"]
-                auth_transaction = self.context["auth_transaction"]
+                verify_type = user_input[_VERIFY_TYPE]
+                auth_transaction = self.context[_AUTH_TRANSACTION]
                 auth_transaction = await self.api.async_login_confirmation_send(
                     auth_transaction=auth_transaction, confirmation_type=verify_type
                 )
-                self.context["auth_transaction"] = auth_transaction
+                self.context[_AUTH_TRANSACTION] = auth_transaction
                 return await self.async_step_verify_code()
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
@@ -267,22 +265,26 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 errors["base"] = str(err)
 
         types = {}
-        _LOGGER.debug("step_send_code auth: %s", self.context[const.CONF_AUTH])
-        for typ in self.context[const.CONF_AUTH]["types"]:
-            if typ == "PHONE":
+        _LOGGER.debug("step_send_code auth: %s", self.context[_AUTH_TRANSACTION])
+        for typ in self.context[_AUTH_TRANSACTION]["types"]:
+            if typ == pesc_client.CONFIRMATION_SMS:
                 lab = "SMS"
-            elif typ == "EMAIL":
+            elif typ == pesc_client.CONFIRMATION_EMAIL:
                 lab = "электронной почте"
-            elif typ == "FLASHCALL":
+            elif typ == pesc_client.CONFIRMATION_CALL:
                 lab = "звонку"
             else:
                 lab = typ
             types[typ] = f"По {lab}"
 
-        schema = {vol.Required("verify_type", default="PHONE"): vol.In(types)}
+        schema = {
+            vol.Required(_VERIFY_TYPE, default=pesc_client.CONFIRMATION_SMS): vol.In(
+                types
+            )
+        }
 
         return self.async_show_form(
-            step_id="send_code", data_schema=vol.Schema(schema), errors=errors
+            step_id=_STEP_SEND_CODE, data_schema=vol.Schema(schema), errors=errors
         )
 
     async def async_step_verify_code(self, user_input: Optional[Dict[str, Any]] = None):
@@ -290,8 +292,8 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         if user_input is not None:
             try:
                 auth = await self.api.async_login_confirmation_verify(
-                    auth=self.context["auth_transaction"],
-                    code=user_input["verify_code"],
+                    auth=self.context[_AUTH_TRANSACTION],
+                    code=user_input[_VERIFY_CODE],
                 )
 
                 if self.source == config_entries.SOURCE_REAUTH:
@@ -299,21 +301,22 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
                 await self.api.async_fetch_profile()
 
-                data = {}
-                data[const.CONF_AUTH] = auth
-                data[const.CONF_LOGIN_TYPE] = self.context[const.CONF_LOGIN_TYPE]
-                data[const.CONF_USERNAME] = self.context[const.CONF_USERNAME]
-                if const.CONF_PASSWORD in self.context:
-                    data[const.CONF_PASSWORD] = self.context[const.CONF_PASSWORD]
+                data = {
+                    _AUTH: auth,
+                    _LOGIN_TYPE: self.context[_LOGIN_TYPE],
+                    _USERNAME: self.context[_USERNAME],
+                }
+                if _PASSWORD in self.context:
+                    data[_PASSWORD] = self.context[_PASSWORD]
                 return self.async_create_entry(title=self.api.profile_name, data=data)
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
             except pesc_client.ClientError as err:
                 errors["base"] = str(err)
 
-        schema = {vol.Required("verify_code"): str}
+        schema = {vol.Required(_VERIFY_CODE): str}
         return self.async_show_form(
-            step_id="verify_code",
+            step_id=_STEP_VERIFY_CODE,
             data_schema=vol.Schema(schema),
             errors=errors,
             last_step=True,

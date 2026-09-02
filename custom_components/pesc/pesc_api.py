@@ -224,8 +224,17 @@ class PescApi:
     ) -> pesc_client.UserAuth:
         _LOGGER.debug("Relogin %s", username)
         return await self.client.async_users_reauth(
-            username, password, auth, login_type.upper()
+            username,
+            password,
+            auth,
+            login_type.upper(),
         )
+
+    async def async_login_totp_confirmation_verify(
+        self, transaction_id: str, code: str
+    ) -> pesc_client.UserAuth:
+        _LOGGER.debug("Verify TOTP confirmation %s", transaction_id)
+        return await self.client.async_users_totp_verification(transaction_id, code)
 
     async def async_login_confirmation_send(
         self, auth_transaction: pesc_client.UserAuthTransaction, confirmation_type: str

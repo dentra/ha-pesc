@@ -6,7 +6,8 @@
       "cannot_connect": "Ошибка подключения к серверу",
       "invalid_auth": "Ошибка аутентификации",
       "invalid_username": "Неверное имя пользователя",
-      "invalid_password": "Неверный пароль"
+      "invalid_password": "Неверный пароль",
+      "invalid_totp": "Неверный код двухфакторной аутентификации"
     },
     "abort": {
       "already_configured": "Такой аккаунт уже существует",
@@ -48,6 +49,13 @@
         "data": {
           "password": "Пароль"
         }
+      },
+      "totp_code": {
+        "title": "Код двухфакторной аутентификации",
+        "description": "Введите текущий код из приложения-аутентификатора",
+        "data": {
+          "totp_code": "Код 2FA"
+        }
       }
     }
   },
@@ -71,9 +79,9 @@
     },
     "verify_types": {
       "options": {
-        "PHONE": "По SMS",
-        "EMAIL": "По электронной почте",
-        "FLASHCALL": "По звонку"
+          "PHONE": "По SMS",
+          "EMAIL": "По электронной почте",
+          "TOTP": "TOTP"
       }
     }
   },

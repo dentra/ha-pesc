@@ -6,7 +6,8 @@
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
       "invalid_username": "Invalid username",
-      "invalid_password": "Invalid password"
+      "invalid_password": "Invalid password",
+      "invalid_totp": "Invalid two-factor authentication code"
     },
     "abort": {
       "already_configured": "Account is already configured",
@@ -48,6 +49,13 @@
         "data": {
           "password": "Password"
         }
+      },
+      "totp_code": {
+        "title": "Two-factor authentication code",
+        "description": "Enter the current code from your authenticator app",
+        "data": {
+          "totp_code": "2FA code"
+        }
       }
     }
   },
@@ -71,9 +79,9 @@
     },
     "verify_types": {
       "options": {
-        "PHONE": "By SMS",
-        "EMAIL": "By e-mail",
-        "FLASHCALL": "By phone call"
+          "PHONE": "By SMS",
+          "EMAIL": "By e-mail",
+          "TOTP": "TOTP"
       }
     }
   }

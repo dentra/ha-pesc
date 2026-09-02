@@ -33,11 +33,13 @@ _LOGIN_TYPE: Final = const.CONF_LOGIN_TYPE
 _AUTH_TRANSACTION: Final = "auth_transaction"
 _SAVE_PWD: Final = "save_password"
 _VERIFY_CODE: Final = "verify_code"
+_TOTP_CODE: Final = "totp_code"
 _VERIFY_TYPE: Final = "verify_type"
 _LOGIN_TYPE_PHONE: Final = pesc_client.LOGIN_TYPE_PHONE
 _LOGIN_TYPE_EMAIL: Final = pesc_client.LOGIN_TYPE_EMAIL
 
 _STEP_REAUTH_CONFIRM: Final = "reauth_confirm"
+_STEP_TOTP_CODE: Final = "totp_code"
 _STEP_USER: Final = "user"
 _STEP_AUTH: Final = "auth"
 _STEP_SEND_CODE: Final = "send_code"
@@ -45,6 +47,13 @@ _STEP_VERIFY_CODE: Final = "verify_code"
 
 _FLOW_ERROR_INVALID_USERNAME: Final = "invalid_username"
 _FLOW_ERROR_INVALID_PASSWORD: Final = "invalid_password"
+_FLOW_ERROR_INVALID_TOTP: Final = "invalid_totp"
+
+_SUPPORTED_CONFIRMATION_TYPES: Final = (
+    pesc_client.CONFIRMATION_SMS,
+    pesc_client.CONFIRMATION_EMAIL,
+    pesc_client.CONFIRMATION_TOTP,
+)
 
 _AUTOCOMPLETE_TEL: Final = "tel"
 _AUTOCOMPLETE_EMAIL: Final = "email"
@@ -102,6 +111,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
         if user_input is not None:
             try:
+                self.context[_PASSWORD] = user_input[_PASSWORD]
                 if self.api.can_reauth(self.context[_AUTH]):
                     auth = await self.api.async_relogin(
                         username=self.context[_USERNAME],
@@ -118,6 +128,14 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 )
                 self.context[_AUTH_TRANSACTION] = auth_transaction
                 return await self.async_step_send_code()
+            except pesc_client.ClientTwoFactorRequired as err:
+                if err.transaction_id:
+                    self.context[_AUTH_TRANSACTION] = {
+                        "transactionId": err.transaction_id,
+                        "types": err.types,
+                    }
+                    return await self.async_step_send_code()
+                errors["base"] = str(err)
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
             except pesc_client.ClientError as err:
@@ -142,6 +160,63 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             ),
             errors=errors,
         )
+
+    async def async_step_totp_code(
+        self, user_input: Optional[dict[str, Any]] = None
+    ) -> FlowResult:
+        """Handle a TOTP code for the authentication transaction."""
+
+        errors: Dict[str, str] = {}
+
+        if user_input is not None:
+            code = str(user_input.get(_TOTP_CODE, "")).strip()
+            if len(code) != 6 or not code.isdigit():
+                errors[_TOTP_CODE] = _FLOW_ERROR_INVALID_TOTP
+            else:
+                try:
+                    auth = await self.api.async_login_totp_confirmation_verify(
+                        transaction_id=self.context[_AUTH_TRANSACTION]["transactionId"],
+                        code=code,
+                    )
+                    return await self._finish_auth(auth)
+                except pesc_client.ClientError as err:
+                    if str(err.code) in {"400", "1024"}:
+                        errors[_TOTP_CODE] = _FLOW_ERROR_INVALID_TOTP
+                    else:
+                        errors["base"] = str(err)
+
+            user_input[_TOTP_CODE] = code
+
+        schema = {
+            vol.Required(_TOTP_CODE): selector.TextSelector(
+                selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.TEXT,
+                    autocomplete="one-time-code",
+                )
+            )
+        }
+        return self.async_show_form(
+            step_id=_STEP_TOTP_CODE,
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(schema), user_input
+            ),
+            errors=errors,
+            last_step=True,
+        )
+
+    async def _finish_auth(self, auth: pesc_client.UserAuth) -> FlowResult:
+        if self.source == config_entries.SOURCE_REAUTH:
+            return await self._reauth_finish(auth)
+
+        await self.api.async_fetch_profile()
+        data = {
+            _AUTH: auth,
+            _LOGIN_TYPE: self.context[_LOGIN_TYPE],
+            _USERNAME: self.context[_USERNAME],
+        }
+        if _PASSWORD in self.context:
+            data[_PASSWORD] = self.context[_PASSWORD]
+        return self.async_create_entry(title=self.api.profile_name, data=data)
 
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None):
         """Handle the initial step."""
@@ -260,6 +335,8 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             try:
                 verify_type = user_input[_VERIFY_TYPE]
                 auth_transaction = self.context[_AUTH_TRANSACTION]
+                if verify_type == pesc_client.CONFIRMATION_TOTP:
+                    return await self.async_step_totp_code()
                 auth_transaction = await self.api.async_login_confirmation_send(
                     auth_transaction=auth_transaction, confirmation_type=verify_type
                 )
@@ -270,25 +347,20 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             except pesc_client.ClientError as err:
                 errors["base"] = str(err)
 
-        types = {}
         _LOGGER.debug("step_send_code auth: %s", self.context[_AUTH_TRANSACTION])
-        for typ in self.context[_AUTH_TRANSACTION]["types"]:
-            if typ == pesc_client.CONFIRMATION_SMS:
-                lab = "SMS"
-            elif typ == pesc_client.CONFIRMATION_EMAIL:
-                lab = "электронной почте"
-            elif typ == pesc_client.CONFIRMATION_CALL:
-                lab = "звонку"
-            else:
-                lab = typ
-            types[typ] = f"По {lab}"
+        received_types = {
+            str(typ).upper() for typ in self.context[_AUTH_TRANSACTION]["types"]
+        }
+        available_types = [
+            typ for typ in _SUPPORTED_CONFIRMATION_TYPES if typ in received_types
+        ]
 
         schema = {
             vol.Required(
-                _VERIFY_TYPE, default=pesc_client.CONFIRMATION_SMS
+                _VERIFY_TYPE, default=available_types[0]
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=self.context[_AUTH_TRANSACTION]["types"],
+                    options=available_types,
                     translation_key="verify_types",
                 )
             ),
@@ -307,19 +379,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                     code=user_input[_VERIFY_CODE],
                 )
 
-                if self.source == config_entries.SOURCE_REAUTH:
-                    return await self._reauth_finish(auth)
-
-                await self.api.async_fetch_profile()
-
-                data = {
-                    _AUTH: auth,
-                    _LOGIN_TYPE: self.context[_LOGIN_TYPE],
-                    _USERNAME: self.context[_USERNAME],
-                }
-                if _PASSWORD in self.context:
-                    data[_PASSWORD] = self.context[_PASSWORD]
-                return self.async_create_entry(title=self.api.profile_name, data=data)
+                return await self._finish_auth(auth)
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
             except pesc_client.ClientError as err:

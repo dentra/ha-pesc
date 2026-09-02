@@ -18,6 +18,7 @@ AUTH_ACCESS: Final = "access"
 CONFIRMATION_SMS: Final = "PHONE"
 CONFIRMATION_EMAIL: Final = "EMAIL"
 CONFIRMATION_CALL: Final = "FLASHCALL"
+CONFIRMATION_TOTP: Final = "TOTP"
 
 
 class AccountAddress(TypedDict):
@@ -326,7 +327,11 @@ class PescClient:
         return AUTH_VERIFIED in auth
 
     async def async_users_reauth(
-        self, username: str, password: str, auth: UserAuth, type: str = "PHONE"
+        self,
+        username: str,
+        password: str,
+        auth: UserAuth,
+        type: str = "PHONE",
     ) -> UserAuth:
         """
         возвращает json c полями access и auth.
@@ -343,18 +348,52 @@ class PescClient:
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers["Captcha"] = "none"
         headers["Auth-verification"] = auth[AUTH_VERIFIED]
+        headers["withTotp"] = "true"
 
         payload = {"login": username, "password": password, "type": type}
         result = await self._session.post(
             f"{self._API_URL}/v8/users/auth", headers=headers, json=payload
         )
-        # Ожидаемый статус 424
+        if result.status == 424:
+            body = {}
+            try:
+                body = await result.json()
+            except Exception:
+                pass
+            raise ClientTwoFactorRequired(result.request_info, body, code=424)
         if result.status != 200:
             raise ClientError(
                 result.request_info,
                 code=result.status,
                 message="Неожиданный статус ответа повторной авторизации",
             )
+        json = await result.json()
+        self._updata_auth(json)
+        return json
+
+    async def async_users_totp_verification(
+        self, transaction_id: str, code: str
+    ) -> UserAuth:
+        """Verify a TOTP code for a pending authentication transaction."""
+        headers = self._headers.copy()
+        headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
+        result = await self._session.post(
+            f"{self._API_URL}/v1/dfa/{transaction_id}/totp/verify",
+            headers=headers,
+            json={"code": code},
+        )
+        if result.status != 200:
+            error = {
+                "code": result.status,
+                "message": "Неожиданный статус ответа подтверждения TOTP",
+            }
+            try:
+                body = await result.json()
+                if body.get("message") or body.get("code"):
+                    error.update(body)
+            except Exception:
+                pass
+            raise ClientError(result.request_info, error)
         json = await result.json()
         self._updata_auth(json)
         return json
@@ -373,6 +412,7 @@ class PescClient:
         headers = self._headers.copy()
         headers.pop(aiohttp.hdrs.AUTHORIZATION, None)
         headers["Captcha"] = "none"
+        headers["withTotp"] = "true"
         result = await self._session.post(
             f"{self._API_URL}/v8/users/auth",
             headers=headers,
@@ -560,3 +600,13 @@ class ClientError(exceptions.HomeAssistantError):
 
 class ClientAuthError(ClientError):
     pass
+
+
+class ClientTwoFactorRequired(ClientAuthError):
+    @property
+    def transaction_id(self) -> Optional[str]:
+        return self.json.get("transactionId")
+
+    @property
+    def types(self) -> list[str]:
+        return self.json.get("types", [])

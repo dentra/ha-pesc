@@ -1,7 +1,7 @@
 import json as jsonmod
 import logging
 from enum import StrEnum
-from typing import Any, Final, List, Optional, TypedDict
+from typing import Any, Final, List, NoReturn, Optional, TypedDict
 
 import aiohttp
 from homeassistant import exceptions
@@ -233,6 +233,21 @@ class PescClient:
                 result.request_info, code=err.status, message=err.message
             ) from err
 
+    async def _raise_unexpected(
+        self,
+        result: aiohttp.ClientResponse,
+        message: str,
+        error: Optional[type["ClientError"]] = None,
+    ) -> NoReturn:
+        json = {"code": result.status, "message": message}
+        try:
+            body = await result.json(content_type=None)
+            if isinstance(body, dict):
+                json.update({k: v for k, v in body.items() if v not in (None, "")})
+        except Exception:
+            pass
+        raise (error or ClientError)(result.request_info, json)
+
     async def _async_get_raw(self, url: str) -> aiohttp.ClientResponse:
         _LOGGER.debug("request: %s", url)
         return await self._session.get(f"{self._API_URL}{url}", headers=self._headers)
@@ -353,22 +368,14 @@ class PescClient:
             f"{self._API_URL}/v8/users/auth", headers=headers, json=payload
         )
         if result.status == 424:
-            body = {}
-            try:
-                body = await result.json()
-            except Exception:
-                pass
-            raise ClientTwoFactorRequired(
-                result.request_info,
-                body,
-                code=424,
-                message="Требуется подтверждение вторым фактором",
+            await self._raise_unexpected(
+                result,
+                "Требуется подтверждение вторым фактором",
+                ClientTwoFactorRequired,
             )
         if result.status != 200:
-            raise ClientError(
-                result.request_info,
-                code=result.status,
-                message="Неожиданный статус ответа повторной авторизации",
+            await self._raise_unexpected(
+                result, "Неожиданный статус ответа повторной авторизации"
             )
         json = await result.json()
         self._updata_auth(json)
@@ -386,17 +393,9 @@ class PescClient:
             json={"code": code},
         )
         if result.status != 200:
-            error = {
-                "code": result.status,
-                "message": "Неожиданный статус ответа подтверждения TOTP",
-            }
-            try:
-                body = await result.json()
-                if body.get("message") or body.get("code"):
-                    error.update(body)
-            except Exception:
-                pass
-            raise ClientError(result.request_info, error)
+            await self._raise_unexpected(
+                result, "Неожиданный статус ответа подтверждения TOTP"
+            )
         json = await result.json()
         self._updata_auth(json)
         return json
@@ -423,17 +422,9 @@ class PescClient:
         )
         # Ожидаемый статус 424
         if result.status != 424:
-            json = {
-                "code": result.status,
-                "message": "Неожиданный статус ответа авторизации",
-            }
-            try:
-                body = await result.json()
-                if body.get("message"):
-                    json = body
-            except Exception:
-                pass
-            raise ClientError(result.request_info, json)
+            await self._raise_unexpected(
+                result, "Неожиданный статус ответа авторизации"
+            )
         json = await result.json()
         return json
 
@@ -455,17 +446,9 @@ class PescClient:
         )
         # Ожидаемый статус 200
         if result.status != 200:
-            json = {
-                "code": result.status,
-                "message": "Неожиданный статус ответа запроса кода подтверждения",
-            }
-            try:
-                body = await result.json()
-                if body.get("message"):
-                    json = body
-            except Exception:
-                pass
-            raise ClientError(result.request_info, json)
+            await self._raise_unexpected(
+                result, "Неожиданный статус ответа запроса кода подтверждения"
+            )
         # тело ответа значения не имеет
         auth_transaction["confirmation_type"] = confirmation_type.lower()
         return auth_transaction
@@ -500,17 +483,9 @@ class PescClient:
         )
         # Ожидаемый статус 200
         if result.status != 200:
-            json = {
-                "code": result.status,
-                "message": "Неожиданный статус ответа подтверждения кода",
-            }
-            try:
-                body = await result.json()
-                if body.get("message"):
-                    json = body
-            except Exception:
-                pass
-            raise ClientError(result.request_info, json)
+            await self._raise_unexpected(
+                result, "Неожиданный статус ответа подтверждения кода"
+            )
         json = await result.json()
         self._updata_auth(json)
         return json

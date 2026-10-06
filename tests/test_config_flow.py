@@ -196,3 +196,44 @@ async def test_reauth_second_factor(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert config_entry.data[const.CONF_AUTH] == NEW_AUTH
+
+
+async def test_totp_rejected_by_server(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    mock_2fa_required(aioclient_mock, ["TOTP"])
+    aioclient_mock.post(
+        f"{API_URL}/v1/dfa/{TRANSACTION_ID}/totp/verify",
+        status=400,
+        json={"code": "1024", "message": "Неправильный код", "cause": ""},
+    )
+
+    result = await _start_user_flow(hass, aioclient_mock)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"verify_type": "TOTP"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"totp_code": "123456"}
+    )
+
+    assert result["errors"] == {"totp_code": "invalid_totp"}
+
+
+async def test_reauth_wrong_password(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    config_entry.add_to_hass(hass)
+    aioclient_mock.post(
+        AUTH_URL,
+        status=403,
+        json={"code": "3", "message": "Неверный логин/пароль", "cause": ""},
+    )
+
+    result = await config_entry.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"password": "wrong"}
+    )
+
+    assert result["errors"]["base"].startswith("Неверный логин/пароль")

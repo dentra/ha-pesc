@@ -194,15 +194,14 @@ class Tariff:
 
 
 class PescApi:
-    _profile: Optional[pesc_client.Profile] = None
-    _meters: List[MeterInd] = []
-    _groups: List[Group] = []
-    _tariffs: Dict[int, list[Tariff]] = {}
-    _subservices: Dict[int, pesc_client.Subservice] = {}
-
     def __init__(self, client: pesc_client.PescClient) -> None:
         # _LOGGER.debug("Initialize %s", client.token)
         self.client = client
+        self._profile: Optional[pesc_client.Profile] = None
+        self._meters: List[MeterInd] = []
+        self._groups: List[Group] = []
+        self._tariffs: Dict[int, list[Tariff]] = {}
+        self._subservices: Dict[int, pesc_client.Subservice] = {}
 
     async def async_login(
         self, username: str, password: str, login_type: str

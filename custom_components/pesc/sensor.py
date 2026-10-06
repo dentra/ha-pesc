@@ -66,11 +66,17 @@ async def async_setup_entry(
         ),
     }
 
-    platform = entity_platform.async_get_current_platform()
+    if hass.services.has_service(const.DOMAIN, const.SERVICE_UPDATE_VALUE):
+        return
 
     async def async_execute_update_value(service_call: ServiceCall) -> ServiceResponse:
         # device_id: service_call.data.get(homeassistant.const.ATTR_DEVICE_ID)
-        entities = await platform.async_extract_from_service(service_call)
+        entities = [
+            entity
+            for platform in entity_platform.async_get_platforms(hass, const.DOMAIN)
+            if platform.domain == sensor.DOMAIN
+            for entity in await platform.async_extract_from_service(service_call)
+        ]
 
         _LOGGER.debug("async_execute_update_value %s", repr(service_call))
 

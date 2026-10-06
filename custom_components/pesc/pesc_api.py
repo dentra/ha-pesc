@@ -317,8 +317,12 @@ class PescApi:
             self._load_meters(acc),
             self._load_tariffs(acc),
         )
-        # load subservices after meters to store only required subservices
-        await self._load_subservices(acc)
+        # справочник нужен, только если счётчик пришёл без subservice
+        if any(
+            ind.account is acc and ind.meter.subservice_id not in self._subservices
+            for ind in self._meters
+        ):
+            await self._load_subservices(acc)
 
     async def _load_reading_types(self, acc: Account):
         acc.type = await self.client.async_reading_type(acc.id)
@@ -332,6 +336,11 @@ class PescApi:
         meters = await self.client.async_meters(acc.id)
         for meter in meters:
             met = Meter(meter)
+            if subservice := meter.get("subservice"):
+                # id приходит строкой, в справочнике числом
+                self._subservices[met.subservice_id] = subservice | {
+                    "id": int(subservice["id"])
+                }
             for met_ind in meter["indications"]:
                 ind = MeterInd(acc, met, met_ind)
                 self._meters.append(ind)

@@ -5,7 +5,16 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 
-from .conftest import ACCOUNT_ID, API_URL, load_fixture, mock_data
+from .conftest import (
+    ACCOUNT_ID,
+    API_URL,
+    PROVIDER_ID,
+    calls,
+    load_fixture,
+    mock_data,
+)
+
+SUBSERVICES_URL = f"{API_URL}/v7/accounts/providers/{PROVIDER_ID}/subservices"
 
 
 async def _setup(hass, aioclient_mock, config_entry) -> None:
@@ -77,3 +86,38 @@ async def test_reading_without_date(
     assert float(state.state) == 6
     assert state.attributes["date"] is None
     assert hass.states.get("sensor.pesc_00000abc12_2") is not None
+
+
+SUBSERVICE_ATTRS = {
+    "subservice_id": 54180,
+    "subservice_name": "Электроэнергия",
+    "subservice_utility": "ELECTRICITY",
+}
+
+
+async def test_subservice_from_meters(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    await _setup(hass, aioclient_mock, config_entry)
+
+    attrs = hass.states.get("sensor.pesc_00000abc12_2").attributes
+    assert {key: attrs[key] for key in SUBSERVICE_ATTRS} == SUBSERVICE_ATTRS
+    assert not calls(aioclient_mock, "GET", SUBSERVICES_URL)
+
+
+async def test_subservice_from_catalog(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    meters = load_fixture("meters")
+    del meters[0]["subservice"]
+    aioclient_mock.get(f"{API_URL}/v6/accounts/{ACCOUNT_ID}/meters/info", json=meters)
+
+    await _setup(hass, aioclient_mock, config_entry)
+
+    attrs = hass.states.get("sensor.pesc_00000abc12_2").attributes
+    assert {key: attrs[key] for key in SUBSERVICE_ATTRS} == SUBSERVICE_ATTRS
+    assert calls(aioclient_mock, "GET", SUBSERVICES_URL)

@@ -5,7 +5,56 @@
     "last": "Иванов",
     "patronymic": null
   },
+  "fields": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000001",
+      "type": "DATE",
+      "name": "Дата рождения",
+      "isPreset": false,
+      "isRequired": false,
+      "isSystem": false,
+      "isSelected": false,
+      "isGroup": false,
+      "isIdentificator": false,
+      "isReadonly": false,
+      "isVisible": true,
+      "options": {
+        "entities": [],
+        "max": "now",
+        "min": "1910-01-01"
+      }
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000002",
+      "type": "SELECT",
+      "name": "Пол",
+      "isPreset": false,
+      "isRequired": false,
+      "isSystem": false,
+      "isSelected": true,
+      "isGroup": false,
+      "isIdentificator": false,
+      "isReadonly": false,
+      "isVisible": true,
+      "options": {
+        "entities": [
+          {
+            "id": 1,
+            "name": "Женский"
+          },
+          {
+            "id": 2,
+            "name": "Мужской"
+          }
+        ]
+      }
+    }
+  ],
   "phone": "+70000000000",
   "email": "test@example.com",
-  "isConfirmed": true
+  "isConfirmed": true,
+  "isOnBoardingViewed": false,
+  "synchronizedExternal": false,
+  "synchronizedSource": null,
+  "synchronizedDate": null
 }

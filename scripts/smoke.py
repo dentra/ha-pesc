@@ -1,9 +1,9 @@
 """
 Смоук-тест живого API ikus.pesc.ru, по умолчанию только чтение.
 
-  .venv/bin/python scripts/smoke.py           проверка
-  .venv/bin/python scripts/smoke.py --login   вход со вторым фактором (отправит SMS)
-  .venv/bin/python scripts/smoke.py --update  + передача показаний +1 (изменяет данные)
+  uv run scripts/smoke.py           проверка
+  uv run scripts/smoke.py --login   вход со вторым фактором (отправит SMS)
+  uv run scripts/smoke.py --update  + передача показаний +1 (изменяет данные)
 
 Учётные данные и токены: ~/.config/ha-pesc/smoke.json
   {"username": "+7...", "password": "...", "login_type": "phone", "auth": {...}}
@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import aiohttp
+from homeassistant.util.ssl import client_context
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -155,7 +156,8 @@ async def main() -> int:
     args = parser.parse_args()
 
     cfg = load_config()
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=client_context())
+    async with aiohttp.ClientSession(connector=connector) as session:
         api = pesc_api.PescApi(pesc_client.PescClient(session, cfg.get("auth")))
         if args.login:
             await login(api, cfg)

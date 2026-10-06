@@ -1,0 +1,18 @@
+[project]
+name = "ha-pesc"
+version = "0"
+requires-python = ">=3.14.2"
+
+[dependency-groups]
+dev = [
+    "black",
+    "pytest-homeassistant-custom-component==0.13.367",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -315,6 +315,8 @@ class PescMeterSensor(_PescMeterSensor):
         except pesc_client.ClientAuthError as err:
             if not do_relogin:
                 return await self.relogin_and_update_(values, return_response, True)
+            # из сервиса reauth сам не стартует
+            self.coordinator.config_entry.async_start_reauth(self.hass)
             if not return_response:
                 raise ConfigEntryAuthFailed from err
             return {"code": err.code, "message": err.message}

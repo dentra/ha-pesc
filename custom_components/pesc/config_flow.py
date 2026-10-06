@@ -52,6 +52,7 @@ _FLOW_ERROR_INVALID_TOTP: Final = "invalid_totp"
 _SUPPORTED_CONFIRMATION_TYPES: Final = (
     pesc_client.CONFIRMATION_SMS,
     pesc_client.CONFIRMATION_EMAIL,
+    pesc_client.CONFIRMATION_CALL,
     pesc_client.CONFIRMATION_TOTP,
 )
 
@@ -93,10 +94,11 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
     async def _reauth_finish(self, auth: pesc_client.UserAuth) -> FlowResult:
         _LOGGER.debug("new auth is %s", auth)
         reauth_entry = self._get_reauth_entry()
-        self.hass.config_entries.async_update_entry(
-            reauth_entry,
-            data=reauth_entry.data | {_AUTH: auth},
-        )
+        # relogin не возвращает verified
+        data = reauth_entry.data | {_AUTH: reauth_entry.data[_AUTH] | auth}
+        if _PASSWORD in reauth_entry.data and self.context.get(_PASSWORD):
+            data[_PASSWORD] = self.context[_PASSWORD]
+        self.hass.config_entries.async_update_entry(reauth_entry, data=data)
         await self.hass.config_entries.async_reload(self._reauth_entry_id)
         return self.async_abort(reason="reauth_successful")
 
@@ -354,6 +356,11 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         available_types = [
             typ for typ in _SUPPORTED_CONFIRMATION_TYPES if typ in received_types
         ]
+        if not available_types:
+            return self.async_abort(
+                reason="unsupported_verify_types",
+                description_placeholders={"types": ", ".join(received_types)},
+            )
 
         schema = {
             vol.Required(

@@ -12,7 +12,8 @@
     "abort": {
       "already_configured": "Account is already configured",
       "reauth_successful": "Re-authentication was successful",
-      "service_unavailable": "PSC service temporary unavailable.\n\nPlease try later."
+      "service_unavailable": "PSC service temporary unavailable.\n\nPlease try later.",
+      "unsupported_verify_types": "Unsupported confirmation methods: {types}"
     },
     "step": {
       "user": {
@@ -79,9 +80,10 @@
     },
     "verify_types": {
       "options": {
-          "PHONE": "By SMS",
-          "EMAIL": "By e-mail",
-          "TOTP": "TOTP"
+        "PHONE": "By SMS",
+        "EMAIL": "By e-mail",
+        "FLASHCALL": "By phone call",
+        "TOTP": "Authenticator app (TOTP)"
       }
     }
   }

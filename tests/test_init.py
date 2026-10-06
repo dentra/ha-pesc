@@ -1,3 +1,6 @@
+import logging
+
+import pytest
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -26,7 +29,9 @@ async def test_expired_verified_starts_reauth(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.DEBUG, logger="custom_components.pesc")
     config_entry.add_to_hass(hass)
     aioclient_mock.get(
         f"{API_URL}/v6/users/current",
@@ -41,3 +46,4 @@ async def test_expired_verified_starts_reauth(
     assert config_entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress()
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+    assert "Требуется подтверждение вторым фактором, код 424" in caplog.text

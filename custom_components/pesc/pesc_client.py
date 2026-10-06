@@ -358,7 +358,12 @@ class PescClient:
                 body = await result.json()
             except Exception:
                 pass
-            raise ClientTwoFactorRequired(result.request_info, body, code=424)
+            raise ClientTwoFactorRequired(
+                result.request_info,
+                body,
+                code=424,
+                message="Требуется подтверждение вторым фактором",
+            )
         if result.status != 200:
             raise ClientError(
                 result.request_info,

@@ -123,10 +123,13 @@ async def test_reauth_relogin_keeps_verified(
     aioclient_mock: AiohttpClientMocker,
     config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
+    setup_calls: list,
 ) -> None:
     caplog.set_level(logging.DEBUG, logger="custom_components.pesc")
     config_entry.add_to_hass(hass)
     mock_data(aioclient_mock)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
     aioclient_mock.post(AUTH_URL, json={"auth": "auth-2", "access": "access-2"})
 
     result = await config_entry.start_reauth_flow(hass)
@@ -146,6 +149,7 @@ async def test_reauth_relogin_keeps_verified(
     assert AUTH["verified"] not in caplog.text
     assert "new-secret" not in caplog.text
     assert "auth-2" not in caplog.text
+    assert len(setup_calls) == 2
 
     headers = calls(aioclient_mock, "POST", AUTH_URL)[0][3]
     assert headers["Auth-verification"] == AUTH["verified"]

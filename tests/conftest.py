@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from aiohttp import RequestInfo
@@ -10,6 +11,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMockResponse,
 )
 
+import custom_components.pesc as pesc
 from custom_components.pesc import const
 
 # клиент использует атрибуты, которых нет у мока
@@ -91,3 +93,16 @@ def config_entry() -> MockConfigEntry:
             const.CONF_PASSWORD: "secret",
         },
     )
+
+
+@pytest.fixture
+def setup_calls():
+    calls = []
+    original = pesc.async_setup_entry
+
+    async def async_setup_entry(hass, entry):
+        calls.append(entry.entry_id)
+        return await original(hass, entry)
+
+    with patch.object(pesc, "async_setup_entry", async_setup_entry):
+        yield calls

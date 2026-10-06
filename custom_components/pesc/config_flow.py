@@ -97,9 +97,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         data = reauth_entry.data | {_AUTH: reauth_entry.data[_AUTH] | auth}
         if _PASSWORD in reauth_entry.data and self.context.get(_PASSWORD):
             data[_PASSWORD] = self.context[_PASSWORD]
-        self.hass.config_entries.async_update_entry(reauth_entry, data=data)
-        await self.hass.config_entries.async_reload(self._reauth_entry_id)
-        return self.async_abort(reason="reauth_successful")
+        return self.async_update_reload_and_abort(reauth_entry, data=data)
 
     async def async_step_reauth_confirm(
         self, user_input: Optional[dict[str, Any]] = None

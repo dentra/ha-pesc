@@ -8,7 +8,9 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 
-from .conftest import API_URL, mock_2fa_required, mock_data
+from custom_components.pesc import const
+
+from .conftest import API_URL, AUTH, AUTH_URL, mock_2fa_required, mock_data
 
 
 async def test_setup(
@@ -47,3 +49,45 @@ async def test_expired_verified_starts_reauth(
     flows = hass.config_entries.flow.async_progress()
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
     assert "Требуется подтверждение вторым фактором, код 424" in caplog.text
+
+
+async def test_relogin_keeps_entry_loaded(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+    setup_calls: list,
+) -> None:
+    config_entry.add_to_hass(hass)
+    mock_data(aioclient_mock)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    aioclient_mock.post(AUTH_URL, json={"auth": "auth-2", "access": "access-2"})
+
+    await hass.data[const.DOMAIN][config_entry.entry_id]._relogin(True)
+    await hass.async_block_till_done()
+
+    assert len(setup_calls) == 1
+    assert config_entry.data[const.CONF_AUTH] == {
+        "auth": "auth-2",
+        "access": "access-2",
+        "verified": AUTH["verified"],
+    }
+
+
+async def test_options_change_reloads(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+    setup_calls: list,
+) -> None:
+    config_entry.add_to_hass(hass)
+    mock_data(aioclient_mock)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    hass.config_entries.async_update_entry(
+        config_entry, options={const.CONF_RATES_SENSORS: False}
+    )
+    await hass.async_block_till_done()
+
+    assert len(setup_calls) == 2

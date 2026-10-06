@@ -39,7 +39,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry):
     """Update from a config entry options."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    # обновление токенов в data не требует перезагрузки
+    if entry.options != hass.data[const.DOMAIN][entry.entry_id].options:
+        await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -85,6 +87,8 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
         _LOGGER.debug("Initialize updater for %s", entry.title)
+
+        self.options = dict(entry.options)
 
         self.api = pesc_api.PescApi(
             pesc_client.PescClient(

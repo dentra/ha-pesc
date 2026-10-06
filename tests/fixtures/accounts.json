@@ -1,0 +1,53 @@
+[
+  {
+    "id": 100001,
+    "tenancy": {
+      "register": "0000100001",
+      "name": {
+        "shorted": "ЛС",
+        "fulled": ""
+      }
+    },
+    "role": {
+      "code": null,
+      "operations": {
+        "documentsHistory": false,
+        "indications": false,
+        "indicationsHistory": false,
+        "payment": false,
+        "paymentsHistory": false,
+        "roleManagement": false,
+        "billSubscriptionsManagement": false,
+        "iku": false,
+        "deliveryChanging": false,
+        "createAutoPayment": false,
+        "paymentsInquiries": false,
+        "paymentsCalculationFormulas": false,
+        "documentProcessing": false,
+        "documentProcessingAttachment": true,
+        "documentProcessingSigning": false
+      },
+      "roleId": null,
+      "roleName": null
+    },
+    "fullName": "Иванов Иван Иванович",
+    "confirmed": true,
+    "externalSystems": null,
+    "autoPaymentOn": false,
+    "delivery": "PAPER",
+    "service": {
+      "providerId": 1,
+      "id": 1,
+      "payment": {
+        "type": "by_calculation_at_current",
+        "categories": [],
+        "editable": true
+      },
+      "providerCode": "PES"
+    },
+    "alias": "Квартира",
+    "regionId": null,
+    "subsidiaryId": null,
+    "main": true
+  }
+]

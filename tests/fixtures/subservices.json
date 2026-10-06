@@ -1,0 +1,16 @@
+[
+  {
+    "id": 54180,
+    "name": "Электроэнергия",
+    "utility": "ELECTRICITY",
+    "type": "BASIC_WITH_VARIABLE_PRICE",
+    "description": ""
+  },
+  {
+    "id": 1,
+    "name": "Холодное водоснабжение",
+    "utility": "WATER",
+    "type": "BASIC",
+    "description": ""
+  }
+]

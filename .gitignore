@@ -5,3 +5,5 @@
 /config
 /hass
 /venv
+/.venv
+.pytest_cache

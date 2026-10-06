@@ -1,0 +1,41 @@
+[
+  {
+    "id": {
+      "provider": 1,
+      "registration": "00000ABC12"
+    },
+    "name": "День (ПУ №12345678)",
+    "numberOfDigitsLeft": 6,
+    "numberOfDigitsRight": 0,
+    "serial": "12345678",
+    "status": "ACTIVE",
+    "indications": [
+      {
+        "previousReadingDate": "21.09.2026",
+        "meterScaleId": 2,
+        "indicationId": null,
+        "scaleName": "День",
+        "previousReading": 12345.0,
+        "registerReading": null,
+        "unit": "кВт*ч"
+      },
+      {
+        "previousReadingDate": "21.09.2026",
+        "meterScaleId": 3,
+        "indicationId": null,
+        "scaleName": "Ночь",
+        "previousReading": 6789.0,
+        "registerReading": null,
+        "unit": "кВт*ч"
+      }
+    ],
+    "subservice": {
+      "id": "54180",
+      "name": "Электроэнергия",
+      "utility": "ELECTRICITY",
+      "type": "BASIC_WITH_VARIABLE_PRICE",
+      "description": ""
+    },
+    "subserviceId": 54180
+  }
+]

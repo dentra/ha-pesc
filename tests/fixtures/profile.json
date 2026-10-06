@@ -1,0 +1,11 @@
+{
+  "userId": 1,
+  "name": {
+    "first": "Иван",
+    "last": "Иванов",
+    "patronymic": null
+  },
+  "phone": "+70000000000",
+  "email": "test@example.com",
+  "isConfirmed": true
+}

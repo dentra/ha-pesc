@@ -1,0 +1,276 @@
+[
+  {
+    "header": "Информация о жилом помещении",
+    "blockType": "SOLID",
+    "content": [
+      {
+        "name": "Контракт",
+        "code": null,
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Тип плиты",
+        "code": null,
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Количество комнат",
+        "code": null,
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Количество зарегистрированных",
+        "code": null,
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Жилая площадь",
+        "code": null,
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      }
+    ],
+    "subHeader": null,
+    "rank": null,
+    "columns": null
+  },
+  {
+    "header": "Информация о приборе учёта № 12345678",
+    "blockType": "SOLID",
+    "content": [
+      {
+        "name": "Услуга",
+        "code": "SERVICE_NAME",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Состояние ПУ",
+        "code": "meterState",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Серийный номер",
+        "code": "METER_NUMBER",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Разрядность",
+        "code": "CAPACITY",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Отношение",
+        "code": "relationType",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Модель",
+        "code": "METER_MODEL",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Место установки",
+        "code": "METER_PLACE",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "МПИ (лет)",
+        "code": "CHECK_INTERVAL",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Кол-во тарифов",
+        "code": "TARIFF",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Класс точности ПУ",
+        "code": "GRADE_ACCUR",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Дата установки",
+        "code": "METER_DATE",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Дата истечения поверки",
+        "code": "METER_CHECK_DATE",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Балансовая принадлежность",
+        "code": "METER_OWNER",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "U-ном. и макс.",
+        "code": "METER_VOLTAGE",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "I ном. и макс.(А)",
+        "code": "METER_CURRENT",
+        "description": "",
+        "value": "-",
+        "columns": null,
+        "rank": null
+      }
+    ],
+    "subHeader": null,
+    "rank": null,
+    "columns": null
+  },
+  {
+    "header": "Электроэнергия",
+    "blockType": "TABLE",
+    "content": [
+      {
+        "name": "Тип тарифа",
+        "code": null,
+        "description": null,
+        "value": "Двухтарифный",
+        "columns": null,
+        "rank": null
+      },
+      {
+        "name": "Круглосуточный",
+        "code": null,
+        "description": "",
+        "value": null,
+        "columns": [
+          {
+            "code": "1",
+            "value": "5.31"
+          },
+          {
+            "code": "2",
+            "value": "6.12"
+          },
+          {
+            "code": "3",
+            "value": "9.13"
+          }
+        ],
+        "rank": 1
+      },
+      {
+        "name": "Ночь",
+        "code": null,
+        "description": "23:00 — 07:00",
+        "value": null,
+        "columns": [
+          {
+            "code": "1",
+            "value": "3.31"
+          },
+          {
+            "code": "2",
+            "value": "3.82"
+          },
+          {
+            "code": "3",
+            "value": "5.69"
+          }
+        ],
+        "rank": 2
+      },
+      {
+        "name": "День",
+        "code": null,
+        "description": "07:00 — 23:00",
+        "value": null,
+        "columns": [
+          {
+            "code": "1",
+            "value": "6.08"
+          },
+          {
+            "code": "2",
+            "value": "7.00"
+          },
+          {
+            "code": "3",
+            "value": "10.45"
+          }
+        ],
+        "rank": 1
+      }
+    ],
+    "subHeader": "Подробная информация о тарифах размещена в разделе <a target=\"_blank\" href=\"https://ikus.pesc.ru/help/faq\">Помощь</a>",
+    "rank": null,
+    "columns": [
+      {
+        "code": "1",
+        "name": "Тариф 1 диапазона потребления",
+        "rank": 1
+      },
+      {
+        "code": "2",
+        "name": "Тариф 2 диапазона потребления",
+        "rank": 2
+      },
+      {
+        "code": "3",
+        "name": "Тариф 3 диапазона потребления",
+        "rank": 3
+      }
+    ]
+  }
+]

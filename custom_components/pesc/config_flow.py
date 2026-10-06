@@ -300,12 +300,16 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         schema = {
             vol.Required(login_type): selector.TextSelector(
                 selector.TextSelectorConfig(
-                    type=selector.TextSelectorType.TEL
-                    if login_type == _LOGIN_TYPE_PHONE
-                    else selector.TextSelectorType.EMAIL,
-                    autocomplete=_AUTOCOMPLETE_TEL
-                    if login_type == _LOGIN_TYPE_PHONE
-                    else _AUTOCOMPLETE_EMAIL,
+                    type=(
+                        selector.TextSelectorType.TEL
+                        if login_type == _LOGIN_TYPE_PHONE
+                        else selector.TextSelectorType.EMAIL
+                    ),
+                    autocomplete=(
+                        _AUTOCOMPLETE_TEL
+                        if login_type == _LOGIN_TYPE_PHONE
+                        else _AUTOCOMPLETE_EMAIL
+                    ),
                 )
             ),
             vol.Required(_PASSWORD): selector.TextSelector(

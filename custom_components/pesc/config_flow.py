@@ -92,7 +92,6 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         return await self.async_step_reauth_confirm()
 
     async def _reauth_finish(self, auth: pesc_client.UserAuth) -> FlowResult:
-        _LOGGER.debug("new auth is %s", auth)
         reauth_entry = self._get_reauth_entry()
         # relogin не возвращает verified
         data = reauth_entry.data | {_AUTH: reauth_entry.data[_AUTH] | auth}
@@ -106,8 +105,6 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Confirm reauth dialog."""
-
-        _LOGGER.debug("async_step_reauth_confirm %s", user_input)
 
         errors: Dict[str, str] = {}
 

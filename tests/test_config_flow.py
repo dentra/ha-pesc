@@ -1,3 +1,6 @@
+import logging
+
+import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -119,7 +122,9 @@ async def test_reauth_relogin_keeps_verified(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.DEBUG, logger="custom_components.pesc")
     config_entry.add_to_hass(hass)
     mock_data(aioclient_mock)
     aioclient_mock.post(AUTH_URL, json={"auth": "auth-2", "access": "access-2"})
@@ -138,6 +143,9 @@ async def test_reauth_relogin_keeps_verified(
         "verified": AUTH["verified"],
     }
     assert config_entry.data[const.CONF_PASSWORD] == "new-secret"
+    assert AUTH["verified"] not in caplog.text
+    assert "new-secret" not in caplog.text
+    assert "auth-2" not in caplog.text
 
     headers = calls(aioclient_mock, "POST", AUTH_URL)[0][3]
     assert headers["Auth-verification"] == AUTH["verified"]

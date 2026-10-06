@@ -30,7 +30,6 @@ _AUTH: Final = const.CONF_AUTH
 _USERNAME: Final = const.CONF_USERNAME
 _PASSWORD: Final = const.CONF_PASSWORD
 _LOGIN_TYPE: Final = const.CONF_LOGIN_TYPE
-_AUTH_TRANSACTION: Final = "auth_transaction"
 _SAVE_PWD: Final = "save_password"
 _VERIFY_CODE: Final = "verify_code"
 _TOTP_CODE: Final = "totp_code"
@@ -68,6 +67,10 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     _api: Optional[pesc_api.PescApi] = None
+    # секреты держим вне self.context: его видит фронтенд
+    _password: Optional[str] = None
+    _auth: Optional[pesc_client.UserAuth] = None
+    _auth_transaction: Optional[pesc_client.UserAuthTransaction] = None
 
     @property
     def api(self):
@@ -86,17 +89,17 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> FlowResult:
         self.context[_LOGIN_TYPE] = entry_data[_LOGIN_TYPE]
-        self.context[_AUTH] = entry_data[_AUTH]
+        self._auth = entry_data[_AUTH]
         self.context[_USERNAME] = entry_data[_USERNAME]
-        self.context[_PASSWORD] = entry_data.get(_PASSWORD)
+        self._password = entry_data.get(_PASSWORD)
         return await self.async_step_reauth_confirm()
 
     async def _reauth_finish(self, auth: pesc_client.UserAuth) -> FlowResult:
         reauth_entry = self._get_reauth_entry()
         # relogin не возвращает verified
         data = reauth_entry.data | {_AUTH: reauth_entry.data[_AUTH] | auth}
-        if _PASSWORD in reauth_entry.data and self.context.get(_PASSWORD):
-            data[_PASSWORD] = self.context[_PASSWORD]
+        if _PASSWORD in reauth_entry.data and self._password:
+            data[_PASSWORD] = self._password
         return self.async_update_reload_and_abort(reauth_entry, data=data)
 
     async def async_step_reauth_confirm(
@@ -108,12 +111,12 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
         if user_input is not None:
             try:
-                self.context[_PASSWORD] = user_input[_PASSWORD]
-                if self.api.can_reauth(self.context[_AUTH]):
+                self._password = user_input[_PASSWORD]
+                if self.api.can_reauth(self._auth):
                     auth = await self.api.async_relogin(
                         username=self.context[_USERNAME],
                         password=user_input[_PASSWORD],
-                        auth=self.context[_AUTH],
+                        auth=self._auth,
                         login_type=self.context[_LOGIN_TYPE],
                     )
                     return await self._reauth_finish(auth)
@@ -123,11 +126,11 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                     password=user_input[_PASSWORD],
                     login_type=self.context[_LOGIN_TYPE],
                 )
-                self.context[_AUTH_TRANSACTION] = auth_transaction
+                self._auth_transaction = auth_transaction
                 return await self.async_step_send_code()
             except pesc_client.ClientTwoFactorRequired as err:
                 if err.transaction_id:
-                    self.context[_AUTH_TRANSACTION] = {
+                    self._auth_transaction = {
                         "transactionId": err.transaction_id,
                         "types": err.types,
                     }
@@ -138,7 +141,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             except pesc_client.ClientError as err:
                 errors["base"] = str(err)
         else:
-            user_input = {_PASSWORD: self.context[_PASSWORD]}
+            user_input = {_PASSWORD: self._password}
 
         schema = {
             vol.Required(_PASSWORD): selector.TextSelector(
@@ -172,7 +175,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             else:
                 try:
                     auth = await self.api.async_login_totp_confirmation_verify(
-                        transaction_id=self.context[_AUTH_TRANSACTION]["transactionId"],
+                        transaction_id=self._auth_transaction["transactionId"],
                         code=code,
                     )
                     return await self._finish_auth(auth)
@@ -211,8 +214,8 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             _LOGIN_TYPE: self.context[_LOGIN_TYPE],
             _USERNAME: self.context[_USERNAME],
         }
-        if _PASSWORD in self.context:
-            data[_PASSWORD] = self.context[_PASSWORD]
+        if self._password is not None:
+            data[_PASSWORD] = self._password
         return self.async_create_entry(title=self.api.profile_name, data=data)
 
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None):
@@ -278,13 +281,13 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
                 await self.async_set_unique_id(f"{const.DOMAIN}_{slugify(profile_id)}")
                 self._abort_if_unique_id_configured()
 
-                self.context[_AUTH_TRANSACTION] = await self.api.async_login(
+                self._auth_transaction = await self.api.async_login(
                     username, password, login_type
                 )
 
                 self.context[_USERNAME] = username
                 if user_input.get(_SAVE_PWD, True):
-                    self.context[_PASSWORD] = password
+                    self._password = password
                 return await self.async_step_send_code()
 
             except ConfigFlowError as err:
@@ -335,23 +338,21 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         if user_input is not None:
             try:
                 verify_type = user_input[_VERIFY_TYPE]
-                auth_transaction = self.context[_AUTH_TRANSACTION]
+                auth_transaction = self._auth_transaction
                 if verify_type == pesc_client.CONFIRMATION_TOTP:
                     return await self.async_step_totp_code()
                 auth_transaction = await self.api.async_login_confirmation_send(
                     auth_transaction=auth_transaction, confirmation_type=verify_type
                 )
-                self.context[_AUTH_TRANSACTION] = auth_transaction
+                self._auth_transaction = auth_transaction
                 return await self.async_step_verify_code()
             except ConfigFlowError as err:
                 errors[err.error_field] = err.error_code
             except pesc_client.ClientError as err:
                 errors["base"] = str(err)
 
-        _LOGGER.debug("step_send_code auth: %s", self.context[_AUTH_TRANSACTION])
-        received_types = {
-            str(typ).upper() for typ in self.context[_AUTH_TRANSACTION]["types"]
-        }
+        _LOGGER.debug("step_send_code auth: %s", self._auth_transaction)
+        received_types = {str(typ).upper() for typ in self._auth_transaction["types"]}
         available_types = [
             typ for typ in _SUPPORTED_CONFIRMATION_TYPES if typ in received_types
         ]
@@ -381,7 +382,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         if user_input is not None:
             try:
                 auth = await self.api.async_login_confirmation_verify(
-                    auth_transaction=self.context[_AUTH_TRANSACTION],
+                    auth_transaction=self._auth_transaction,
                     code=user_input[_VERIFY_CODE],
                 )
 

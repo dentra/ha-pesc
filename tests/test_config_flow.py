@@ -30,6 +30,11 @@ SITE_CONFIG = {
     }
 }
 
+
+def _progress_context(hass: HomeAssistant) -> str:
+    return str([flow["context"] for flow in hass.config_entries.flow.async_progress()])
+
+
 NEW_AUTH = {"auth": "auth-2", "access": "access-2", "verified": "verified-2"}
 
 
@@ -66,6 +71,7 @@ async def test_user_flow_sms(
 
     result = await _start_user_flow(hass, aioclient_mock)
     assert result["step_id"] == "send_code"
+    assert "secret" not in _progress_context(hass)
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"verify_type": "PHONE"}
@@ -172,6 +178,8 @@ async def test_reauth_second_factor(
     )
 
     result = await config_entry.start_reauth_flow(hass)
+    assert "secret" not in _progress_context(hass)
+    assert AUTH["verified"] not in _progress_context(hass)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"password": "secret"}
     )

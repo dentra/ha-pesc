@@ -3,21 +3,16 @@
 import logging
 from typing import Callable, Optional
 
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
 from homeassistant.components import sensor
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfVolume
 from homeassistant.core import (
     HomeAssistant,
     HomeAssistantError,
-    ServiceCall,
     ServiceResponse,
-    SupportsResponse,
     callback,
 )
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -46,89 +41,6 @@ async def async_setup_entry(
         async_add_entities(
             PescRateSensor(coordinator, m) for m in coordinator.api.meters
         )
-
-    schema_value = vol.All(vol.Coerce(int), vol.Range(min=1))
-    service_schema = {
-        vol.Required(const.CONF_VALUE): vol.Any(
-            schema_value,
-            cv.ensure_list(
-                vol.Schema(
-                    {
-                        vol.Required("scale_id"): int,
-                        vol.Required(const.CONF_VALUE): schema_value,
-                    }
-                )
-            ),
-        ),
-        vol.Optional("throws"): vol.All(
-            vol.Coerce(bool),
-            vol.DefaultTo(True),
-        ),
-    }
-
-    if hass.services.has_service(const.DOMAIN, const.SERVICE_UPDATE_VALUE):
-        return
-
-    async def async_execute_update_value(service_call: ServiceCall) -> ServiceResponse:
-        # device_id: service_call.data.get(homeassistant.const.ATTR_DEVICE_ID)
-        entities = [
-            entity
-            for platform in entity_platform.async_get_platforms(hass, const.DOMAIN)
-            if platform.domain == sensor.DOMAIN
-            for entity in await platform.async_extract_from_service(service_call)
-        ]
-
-        _LOGGER.debug("async_execute_update_value %s", repr(service_call))
-
-        if not entities:
-            raise HomeAssistantError("Ни одной цели не выбрано")
-
-        meter_id = ""
-        for entity in entities:
-            if not isinstance(entity, _PescMeterSensor):
-                raise HomeAssistantError(
-                    "Должна быть выбрана цель типа PescMeterSensor"
-                )
-            if entity.meter.auto:
-                raise HomeAssistantError(
-                    "Показания цели передаются в автоматическом режиме"
-                )
-            if not meter_id:
-                meter_id = entity.meter.meter.id
-            if entity.meter.meter.id != meter_id:
-                raise HomeAssistantError("У всех целей должен быть одинаковый meter_id")
-
-        values = service_call.data[const.CONF_VALUE]
-        if not isinstance(values, list):
-            # most likely call from gui
-            if len(entities) != 1:
-                raise HomeAssistantError("Должна быть выбрана только одна цель")
-            entity: _PescMeterSensor = entities[0]
-            values = [{const.CONF_SCALE_ID: entity.meter.scale_id, "value": values}]
-
-        if len(entities) != len(values):
-            raise HomeAssistantError(
-                "Количество целей должно соответствовать количеству сущностей"
-            )
-
-        entity: _PescMeterSensor = entities[0]
-        return await entity.async_update_value(
-            [
-                pesc_client.UpdateValuePayload(
-                    scaleId=val[const.CONF_SCALE_ID], value=val[const.CONF_VALUE]
-                )
-                for val in values
-            ],
-            service_call.return_response,
-        )
-
-    hass.services.async_register(
-        const.DOMAIN,
-        const.SERVICE_UPDATE_VALUE,
-        async_execute_update_value,
-        cv.make_entity_service_schema(service_schema),
-        SupportsResponse.OPTIONAL,
-    )
 
 
 class _PescBaseSensor(

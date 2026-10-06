@@ -3,6 +3,8 @@ import logging
 import pytest
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
@@ -91,3 +93,16 @@ async def test_options_change_reloads(
     await hass.async_block_till_done()
 
     assert len(setup_calls) == 2
+
+
+async def test_service_without_entries(hass: HomeAssistant) -> None:
+    assert await async_setup_component(hass, const.DOMAIN, {})
+
+    assert hass.services.has_service(const.DOMAIN, const.SERVICE_UPDATE_VALUE)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            const.DOMAIN,
+            const.SERVICE_UPDATE_VALUE,
+            {"entity_id": "sensor.pesc_00000abc12_2", "value": 1},
+            blocking=True,
+        )

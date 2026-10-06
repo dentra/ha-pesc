@@ -338,7 +338,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         errors: Dict[str, str] = {}
         if user_input is not None:
             try:
-                verify_type = user_input[_VERIFY_TYPE]
+                verify_type = user_input[_VERIFY_TYPE].upper()
                 auth_transaction = self._auth_transaction
                 if verify_type == pesc_client.CONFIRMATION_TOTP:
                     return await self.async_step_totp_code()
@@ -354,8 +354,11 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
 
         _LOGGER.debug("step_send_code auth: %s", self._auth_transaction)
         received_types = {str(typ).upper() for typ in self._auth_transaction["types"]}
+        # ключи вариантов в переводах только строчные
         available_types = [
-            typ for typ in _SUPPORTED_CONFIRMATION_TYPES if typ in received_types
+            typ.lower()
+            for typ in _SUPPORTED_CONFIRMATION_TYPES
+            if typ in received_types
         ]
         if not available_types:
             return self.async_abort(

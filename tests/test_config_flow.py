@@ -74,7 +74,7 @@ async def test_user_flow_sms(
     assert "secret" not in _progress_context(hass)
 
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"verify_type": "PHONE"}
+        result["flow_id"], {"verify_type": "phone"}
     )
     assert result["step_id"] == "verify_code"
 
@@ -98,7 +98,7 @@ async def test_user_flow_totp(
 
     result = await _start_user_flow(hass, aioclient_mock)
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"verify_type": "TOTP"}
+        result["flow_id"], {"verify_type": "totp"}
     )
     assert result["step_id"] == "totp_code"
 
@@ -188,7 +188,7 @@ async def test_reauth_second_factor(
     assert result["step_id"] == "send_code"
 
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"verify_type": "PHONE"}
+        result["flow_id"], {"verify_type": "phone"}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"verify_code": "12345"}
@@ -210,7 +210,7 @@ async def test_totp_rejected_by_server(
 
     result = await _start_user_flow(hass, aioclient_mock)
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"verify_type": "TOTP"}
+        result["flow_id"], {"verify_type": "totp"}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"totp_code": "123456"}

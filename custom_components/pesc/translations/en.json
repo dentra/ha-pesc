@@ -1,7 +1,6 @@
 {
   "title": "Pesc (PSC/EIRC)",
   "config": {
-    "title": "New connection to PSC/EIRC",
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
@@ -80,10 +79,10 @@
     },
     "verify_types": {
       "options": {
-        "PHONE": "By SMS",
-        "EMAIL": "By e-mail",
-        "FLASHCALL": "By phone call",
-        "TOTP": "Authenticator app (TOTP)"
+        "phone": "By SMS",
+        "email": "By e-mail",
+        "flashcall": "By phone call",
+        "totp": "Authenticator app (TOTP)"
       }
     }
   }

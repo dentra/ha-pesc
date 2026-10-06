@@ -108,10 +108,12 @@ async def test_user_flow_totp(
     assert result["errors"] == {"totp_code": "invalid_totp"}
 
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"totp_code": "123456"}
+        result["flow_id"], {"totp_code": "123 456"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][const.CONF_AUTH] == NEW_AUTH
+    totp_url = f"{API_URL}/v1/dfa/{TRANSACTION_ID}/totp/verify"
+    assert calls(aioclient_mock, "POST", totp_url)[0][2] == {"code": "123456"}
 
 
 async def test_user_flow_unsupported_types(

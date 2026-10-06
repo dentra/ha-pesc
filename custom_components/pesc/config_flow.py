@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from datetime import timedelta
 from typing import Any, Dict, Final, Optional
@@ -169,8 +170,8 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
         errors: Dict[str, str] = {}
 
         if user_input is not None:
-            code = str(user_input.get(_TOTP_CODE, "")).strip()
-            if len(code) != 6 or not code.isdigit():
+            code = re.sub(r"[\s-]", "", str(user_input.get(_TOTP_CODE, "")))
+            if not 6 <= len(code) <= 8 or not code.isdigit():
                 errors[_TOTP_CODE] = _FLOW_ERROR_INVALID_TOTP
             else:
                 try:

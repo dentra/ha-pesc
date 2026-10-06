@@ -20,6 +20,7 @@ from homeassistant.helpers.schema_config_entry_flow import (
     SchemaFlowFormStep,
     SchemaFlowMenuStep,
     SchemaOptionsFlowHandler,
+    SchemaOptionsFlowHandlerWithReload,
 )
 from homeassistant.util import slugify
 
@@ -86,7 +87,7 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
-        return SchemaOptionsFlowHandler(config_entry, OPTIONS_FLOW)
+        return SchemaOptionsFlowHandlerWithReload(config_entry, OPTIONS_FLOW)
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> FlowResult:
         self.context[_LOGIN_TYPE] = entry_data[_LOGIN_TYPE]

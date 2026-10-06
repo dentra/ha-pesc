@@ -158,6 +158,7 @@ async def test_reauth_relogin_keeps_verified(
     assert "new-secret" not in caplog.text
     assert "auth-2" not in caplog.text
     assert len(setup_calls) == 2
+    assert "update listener" not in caplog.text
 
     headers = calls(aioclient_mock, "POST", AUTH_URL)[0][3]
     assert headers["Auth-verification"] == AUTH["verified"]

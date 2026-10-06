@@ -87,8 +87,9 @@ async def test_options_change_reloads(
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
 
-    hass.config_entries.async_update_entry(
-        config_entry, options={const.CONF_RATES_SENSORS: False}
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {const.CONF_RATES_SENSORS: False}
     )
     await hass.async_block_till_done()
 

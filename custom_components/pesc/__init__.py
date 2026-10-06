@@ -1,7 +1,7 @@
+import asyncio
 import logging
 from typing import Final, override
 
-import async_timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -127,7 +127,7 @@ class PescDataUpdateCoordinator(DataUpdateCoordinator):
         return True
 
     async def _fetch(self):
-        async with async_timeout.timeout(60):
+        async with asyncio.timeout(60):
             await self.api.async_fetch_all()
 
     async def _relogin(self, do_relogin: bool):

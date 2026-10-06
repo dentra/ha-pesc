@@ -21,6 +21,7 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
 from . import PescDataUpdateCoordinator, const, pesc_api, pesc_client
 
@@ -155,7 +156,7 @@ class _PescBaseSensor(
             # hw_version="",
         )
 
-        self.entity_id = f"sensor.{self._attr_unique_id}"
+        self.entity_id = f"sensor.{slugify(self._attr_unique_id)}"
 
     @property
     def api(self) -> pesc_api.PescApi:

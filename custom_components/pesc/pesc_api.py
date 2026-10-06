@@ -190,7 +190,7 @@ class Tariff:
         if len(self.rates) == 1:
             return self.rates[0]
 
-        return TariffRate("/".join([rate for rate in self.rates]), "unknown")
+        return None
 
 
 class PescApi:

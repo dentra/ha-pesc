@@ -1,9 +1,12 @@
 import pytest
+from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
+
+from custom_components.pesc import const
 
 from .conftest import (
     ACCOUNT_ID,
@@ -121,3 +124,34 @@ async def test_subservice_from_catalog(
     attrs = hass.states.get("sensor.pesc_00000abc12_2").attributes
     assert {key: attrs[key] for key in SUBSERVICE_ATTRS} == SUBSERVICE_ATTRS
     assert calls(aioclient_mock, "GET", SUBSERVICES_URL)
+
+
+async def test_update_value_without_password(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    data = dict(config_entry.data)
+    del data[const.CONF_PASSWORD]
+    entry = MockConfigEntry(
+        domain=const.DOMAIN, version=const.CONFIG_VERSION, data=data
+    )
+    await _setup(hass, aioclient_mock, entry)
+    aioclient_mock.post(
+        f"{API_URL}/v7/accounts/{ACCOUNT_ID}/meters/00000ABC12/reading",
+        status=401,
+        json={"code": "5", "message": "Неавторизованный доступ"},
+    )
+
+    response = await hass.services.async_call(
+        const.DOMAIN,
+        const.SERVICE_UPDATE_VALUE,
+        {"entity_id": "sensor.pesc_00000abc12_2", "value": 12346},
+        blocking=True,
+        return_response=True,
+    )
+    await hass.async_block_till_done()
+
+    assert response["code"] == "5"
+    flows = hass.config_entries.flow.async_progress()
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]

@@ -5,7 +5,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 
-from .conftest import mock_data
+from .conftest import ACCOUNT_ID, API_URL, load_fixture, mock_data
 
 
 async def _setup(hass, aioclient_mock, config_entry) -> None:
@@ -38,3 +38,42 @@ async def test_valid_entity_id(
     await _setup(hass, aioclient_mock, config_entry)
 
     assert "invalid entity ID" not in caplog.text
+
+
+async def test_reading_without_date(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    # счётчик газа из #22
+    gas = {
+        "id": {"provider": 61, "registration": "2"},
+        "name": "Газоснабжение",
+        "numberOfDigitsLeft": 6,
+        "numberOfDigitsRight": 0,
+        "serial": "",
+        "status": "ACTIVE",
+        "indications": [
+            {
+                "previousReadingDate": None,
+                "meterScaleId": 2,
+                "indicationId": None,
+                "scaleName": None,
+                "previousReading": 6.0,
+                "registerReading": None,
+                "unit": None,
+            }
+        ],
+        "subserviceId": 4656,
+    }
+    aioclient_mock.get(
+        f"{API_URL}/v6/accounts/{ACCOUNT_ID}/meters/info",
+        json=[*load_fixture("meters"), gas],
+    )
+
+    await _setup(hass, aioclient_mock, config_entry)
+
+    state = hass.states.get("sensor.pesc_2_2")
+    assert float(state.state) == 6
+    assert state.attributes["date"] is None
+    assert hass.states.get("sensor.pesc_00000abc12_2") is not None

@@ -256,7 +256,7 @@ class PescMeterSensor(_PescMeterSensor):
         self._attr_name = self.meter.name
         self._attr_extra_state_attributes = {
             "type": self.meter.account.type,
-            "date": self.meter.date.isoformat(),
+            "date": self.meter.date.isoformat() if self.meter.date else None,
             "name": self.meter.name,
             "scale_id": self.meter.scale_id,
             "meter_id": self.meter.meter.id,

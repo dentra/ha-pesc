@@ -246,6 +246,9 @@ class PescClient:
                 json.update({k: v for k, v in body.items() if v not in (None, "")})
         except Exception:
             pass
+        if error is None and str(json["code"]) in ("3", "5"):
+            # неверный логин/пароль или неавторизованный доступ
+            error = ClientAuthError
         raise (error or ClientError)(result.request_info, json)
 
     async def _async_get_raw(self, url: str) -> aiohttp.ClientResponse:

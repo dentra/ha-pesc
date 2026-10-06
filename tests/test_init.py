@@ -107,3 +107,28 @@ async def test_service_without_entries(hass: HomeAssistant) -> None:
             {"entity_id": "sensor.pesc_00000abc12_2", "value": 1},
             blocking=True,
         )
+
+
+async def test_wrong_saved_password_starts_reauth(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    config_entry.add_to_hass(hass)
+    aioclient_mock.get(
+        f"{API_URL}/v6/users/current",
+        status=401,
+        json={"code": "5", "message": "Неавторизованный доступ"},
+    )
+    aioclient_mock.post(
+        AUTH_URL,
+        status=403,
+        json={"code": "3", "message": "Неверный логин/пароль", "cause": ""},
+    )
+
+    assert not await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.state is ConfigEntryState.SETUP_ERROR
+    flows = hass.config_entries.flow.async_progress()
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]

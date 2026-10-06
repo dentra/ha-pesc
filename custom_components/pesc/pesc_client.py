@@ -280,13 +280,11 @@ class PescClient:
         )
         await self._async_response_json(result, True)
 
-    @property
     async def async_config(self) -> dict[str, Any]:
         url = f"{self.BASE_URL}/config.json"
         result = await self._session.get(url)
         return await self._async_response_json(result)
 
-    @property
     async def async_site_config(self):
         url = f"{self.BASE_URL}/site-config/config-mp-spb-fl.json"
         result = await self._session.get(url)

@@ -231,10 +231,10 @@ class ConfigFlowHandler(config_entries.ConfigFlow, domain=const.DOMAIN):
             auth_type = cfg["users"]["authentication"]["type"]
             schema = {
                 vol.Required(
-                    _LOGIN_TYPE, default=auth_type["default"]
+                    _LOGIN_TYPE, default=auth_type["default"].lower()
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=auth_type["available"],
+                        options=[typ.lower() for typ in auth_type["available"]],
                         translation_key="login_types",
                     )
                 )

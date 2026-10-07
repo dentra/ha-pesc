@@ -2,9 +2,18 @@ name: Validate
 
 on:
   push:
+    branches: [master]
   pull_request:
   schedule:
     - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-hacs:
@@ -20,5 +29,5 @@ jobs:
     name: Hassfest
     runs-on: ubuntu-latest
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@v7"
       - uses: "home-assistant/actions/hassfest@master"

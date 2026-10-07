@@ -4,12 +4,15 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   release-zip:
     name: Release ZIP
     runs-on: ubuntu-latest
     steps:
-      - uses: "actions/checkout@v2"
+      - uses: "actions/checkout@v7"
       - name: ZIP Component folder
         run: |
           cd ${{ github.workspace }}/custom_components/pesc

@@ -470,6 +470,14 @@ def _manual_meters(
     ]
 
 
+def _meter_choices(
+    handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
+) -> list[str]:
+    # сохранённые счётчики, даже удалённые, иначе форму нельзя сохранить
+    saved = [link[ATTR_ENTITY_ID] for link in handler.options.get(const.CONF_LINKS, [])]
+    return list(dict.fromkeys(_manual_meters(handler) + saved))
+
+
 async def links_options_schema(
     handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
 ) -> vol.Schema:
@@ -486,7 +494,7 @@ async def links_options_schema(
                             "required": True,
                             "selector": selector.EntitySelector(
                                 selector.EntitySelectorConfig(
-                                    include_entities=_manual_meters(handler)
+                                    include_entities=_meter_choices(handler)
                                 )
                             ),
                         },
@@ -515,6 +523,8 @@ async def validate_links(
     meters = [link[ATTR_ENTITY_ID] for link in user_input.get(const.CONF_LINKS, [])]
     if len(meters) != len(set(meters)):
         raise SchemaFlowError("duplicate_link")
+    if set(meters) - set(_manual_meters(handler)):
+        raise SchemaFlowError("missing_meter")
     return user_input
 
 

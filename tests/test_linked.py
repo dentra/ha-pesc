@@ -351,3 +351,30 @@ async def test_send_linked_missing_meter(
 
     assert [result["code"] for result in response["results"]] == [-6]
     assert "sensor.pesc_gone_2" in response["message"]
+
+
+async def test_options_links_missing_meter(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    stale = [{"entity_id": "sensor.pesc_gone_2", "source": "sensor.src_day"}]
+    await _setup(hass, aioclient_mock, config_entry, {const.CONF_LINKS: stale})
+
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {const.CONF_RATES_SENSORS: False}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {const.CONF_LINKS: stale}
+    )
+    assert result["errors"] == {"base": "missing_meter"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {const.CONF_LINKS: LINKS[:1]}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert config_entry.options[const.CONF_LINKS] == LINKS[:1]
+    assert config_entry.options[const.CONF_RATES_SENSORS] is False

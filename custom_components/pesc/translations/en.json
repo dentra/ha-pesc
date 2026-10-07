@@ -77,7 +77,8 @@
       }
     },
     "error": {
-      "duplicate_link": "Meter is linked more than once"
+      "duplicate_link": "Meter is linked more than once",
+      "missing_meter": "Linked meter not found — replace or remove the link"
     }
   },
   "selector": {

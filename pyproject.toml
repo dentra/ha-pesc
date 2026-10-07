@@ -6,7 +6,7 @@ requires-python = ">=3.14.2"
 [dependency-groups]
 dev = [
     "black",
-    "pytest-homeassistant-custom-component==0.13.367",
+    "pytest-homeassistant-custom-component==0.13.368",
 ]
 
 [tool.uv]

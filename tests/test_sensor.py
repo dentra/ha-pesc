@@ -1,7 +1,7 @@
 import pytest
 from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
@@ -173,3 +173,32 @@ async def test_update_value_rate_sensor_rejected(
             blocking=True,
             return_response=True,
         )
+
+
+@pytest.mark.parametrize("throws", [True, False])
+async def test_update_value_throws(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    throws: bool,
+) -> None:
+    await _setup(hass, aioclient_mock, config_entry)
+    aioclient_mock.post(
+        f"{API_URL}/v7/accounts/{ACCOUNT_ID}/meters/00000ABC12/reading",
+        status=400,
+        json={"code": "42", "message": "Показания не приняты"},
+    )
+
+    call = hass.services.async_call(
+        const.DOMAIN,
+        const.SERVICE_UPDATE_VALUE,
+        {"entity_id": "sensor.pesc_00000abc12_2", "value": 12346, "throws": throws},
+        blocking=True,
+    )
+    if throws:
+        with pytest.raises(HomeAssistantError, match="Показания не приняты"):
+            await call
+    else:
+        await call
+        assert "Показания не приняты" in caplog.text

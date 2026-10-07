@@ -22,3 +22,9 @@ update_value:
           max: 999999
 #          unit_of_measurement: kWh
           mode: box
+    throws:
+      name: Throws
+      description: Raise an error if the readings were not accepted
+      default: true
+      selector:
+        boolean:

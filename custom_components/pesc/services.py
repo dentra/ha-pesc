@@ -34,10 +34,7 @@ _UPDATE_VALUE_SCHEMA = cv.make_entity_service_schema(
                 )
             ),
         ),
-        vol.Optional("throws"): vol.All(
-            vol.Coerce(bool),
-            vol.DefaultTo(True),
-        ),
+        vol.Optional("throws", default=True): cv.boolean,
     }
 )
 
@@ -88,15 +85,19 @@ def async_setup_services(hass: HomeAssistant) -> None:
             )
 
         entity: PescMeterSensor = entities[0]
-        return await entity.async_update_value(
+        throws = service_call.data["throws"]
+        response = await entity.async_update_value(
             [
                 pesc_client.UpdateValuePayload(
                     scaleId=val[const.CONF_SCALE_ID], value=val[const.CONF_VALUE]
                 )
                 for val in values
             ],
-            service_call.return_response,
+            service_call.return_response or not throws,
         )
+        if not throws and response["code"] != 0:
+            _LOGGER.warning("Показания не переданы: %s", response["message"])
+        return response if service_call.return_response else None
 
     hass.services.async_register(
         const.DOMAIN,

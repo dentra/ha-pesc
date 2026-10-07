@@ -85,5 +85,21 @@
         "totp": "Authenticator app (TOTP)"
       }
     }
+  },
+  "services": {
+    "update_value": {
+      "name": "Update Energy Value",
+      "description": "Update energy meter readings. Call this service twice for every rate readings.",
+      "fields": {
+        "value": {
+          "name": "Value",
+          "description": "The new meter readings to set"
+        },
+        "throws": {
+          "name": "Raise errors",
+          "description": "Fail the action if the readings were not accepted. If disabled, the error is only logged"
+        }
+      }
+    }
   }
 }

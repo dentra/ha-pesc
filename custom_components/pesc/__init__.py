@@ -1,16 +1,13 @@
-import asyncio
 import logging
-from typing import Final, override
+from typing import Final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from . import const, pesc_api, pesc_client
+from . import const, pesc_client
+from .coordinator import PescDataUpdateCoordinator
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,75 +70,3 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     )
 
     return True
-
-
-# https://developers.home-assistant.io/docs/integration_fetching_data/#polling-api-endpoints
-class PescDataUpdateCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=const.DOMAIN,
-            update_interval=const.DEFAULT_UPDATE_INTERVAL,
-        )
-
-        _LOGGER.debug("Initialize updater for %s", entry.title)
-
-        self.api = pesc_api.PescApi(
-            pesc_client.PescClient(
-                async_get_clientsession(hass), entry.data[const.CONF_AUTH]
-            )
-        )
-
-        if const.CONF_UPDATE_INTERVAL in entry.options:
-            self.update_interval = cv.time_period(
-                entry.options[const.CONF_UPDATE_INTERVAL]
-            )
-
-    @override
-    async def _async_update_data(self):
-        await self._relogin_and_fetch(False)
-
-    async def _relogin_and_fetch(self, do_relogin: bool):
-        try:
-            await self._relogin(do_relogin)
-            await self._fetch()
-        except pesc_client.ClientAuthError as err:
-            if self._can_relogin(do_relogin):
-                await self._relogin_and_fetch(True)
-                return
-            _LOGGER.debug("ClientAuthError: %s", err)
-            # Raising ConfigEntryAuthFailed will cancel future updates
-            # and start a config flow with SOURCE_REAUTH (async_step_reauth)
-            raise ConfigEntryAuthFailed from err
-        except pesc_client.ClientError as err:
-            _LOGGER.error("Ошибка вызова API: %s", err)
-            raise UpdateFailed(f"Ошибка вызова API: {err}") from err
-
-    def _can_relogin(self, do_relogin: bool):
-        # уже была попытка
-        if do_relogin:
-            return False
-        # пароль не сохранен
-        if const.CONF_PASSWORD not in self.config_entry.data:
-            return False
-        return True
-
-    async def _fetch(self):
-        async with asyncio.timeout(60):
-            await self.api.async_fetch_all()
-
-    async def _relogin(self, do_relogin: bool):
-        if not do_relogin:
-            return
-        auth = await self.api.async_relogin(
-            username=self.config_entry.data[const.CONF_USERNAME],
-            password=self.config_entry.data[const.CONF_PASSWORD],
-            auth=self.config_entry.data[const.CONF_AUTH],
-            login_type=self.config_entry.data[const.CONF_LOGIN_TYPE],
-        )
-        data = {
-            **self.config_entry.data,
-            const.CONF_AUTH: self.config_entry.data.get(const.CONF_AUTH) | auth,
-        }
-        self.hass.config_entries.async_update_entry(self.config_entry, data=data)

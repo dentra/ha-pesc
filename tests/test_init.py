@@ -10,7 +10,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 
-from custom_components.pesc import const
+from custom_components.pesc import const, pesc_client
 
 from .conftest import API_URL, AUTH, AUTH_URL, mock_2fa_required, mock_data
 
@@ -65,7 +65,7 @@ async def test_relogin_keeps_entry_loaded(
     await hass.async_block_till_done()
     aioclient_mock.post(AUTH_URL, json={"auth": "auth-2", "access": "access-2"})
 
-    await hass.data[const.DOMAIN][config_entry.entry_id]._relogin(True)
+    await hass.data[const.DOMAIN][config_entry.entry_id]._relogin()
     await hass.async_block_till_done()
 
     assert len(setup_calls) == 1
@@ -132,3 +132,26 @@ async def test_wrong_saved_password_starts_reauth(
     assert config_entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress()
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+async def test_with_relogin_retries_once(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    config_entry.add_to_hass(hass)
+    mock_data(aioclient_mock)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    aioclient_mock.post(AUTH_URL, json={"auth": "auth-2", "access": "access-2"})
+    coordinator = hass.data[const.DOMAIN][config_entry.entry_id]
+    attempts = []
+
+    async def call():
+        attempts.append(coordinator.api.client.auth[pesc_client.AUTH_AUTH])
+        if len(attempts) == 1:
+            raise pesc_client.ClientAuthError(None, code=5)
+        return "ok"
+
+    assert await coordinator.async_with_relogin(call) == "ok"
+    assert attempts == ["auth-1", "auth-2"]

@@ -15,6 +15,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
 
 from . import const, pesc_client
+from .sensor import _PescMeterSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,9 +46,6 @@ def async_setup_services(hass: HomeAssistant) -> None:
     """Register service actions."""
 
     async def async_execute_update_value(service_call: ServiceCall) -> ServiceResponse:
-        # sensor импортирует координатор из __init__
-        from .sensor import _PescMeterSensor
-
         # device_id: service_call.data.get(homeassistant.const.ATTR_DEVICE_ID)
         entities = [
             entity

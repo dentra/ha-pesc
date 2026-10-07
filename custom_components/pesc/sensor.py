@@ -18,7 +18,8 @@ from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from . import PescDataUpdateCoordinator, const, pesc_api, pesc_client
+from . import const, pesc_api, pesc_client
+from .coordinator import PescDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -212,19 +213,19 @@ class PescMeterSensor(_PescMeterSensor):
                     raise HomeAssistantError(msg)
                 return {"code": -3, "message": msg, "values": values}
 
-        res = await self.relogin_and_update_(values, return_response, False)
+        res = await self._async_send_values(values, return_response)
         await self.async_update()
         return res
 
-    async def relogin_and_update_(
+    async def _async_send_values(
         self,
         values: list[pesc_client.UpdateValuePayload],
         return_response: bool,
-        do_relogin: bool,
     ) -> ServiceResponse:
         try:
-            await self.coordinator._relogin(do_relogin)
-            payload = await self.api.async_update_value(self.meter, values)
+            payload = await self.coordinator.async_with_relogin(
+                lambda: self.api.async_update_value(self.meter, values)
+            )
             _LOGGER.debug('[%s] Update "%s" success', self.entity_id, self.name)
             return {
                 "code": 0,
@@ -232,8 +233,6 @@ class PescMeterSensor(_PescMeterSensor):
                 "payload": payload,
             }
         except pesc_client.ClientAuthError as err:
-            if self.coordinator._can_relogin(do_relogin):
-                return await self.relogin_and_update_(values, return_response, True)
             # из сервиса reauth сам не стартует
             self.coordinator.config_entry.async_start_reauth(self.hass)
             if not return_response:

@@ -1,8 +1,11 @@
 import pytest
 from homeassistant.config_entries import SOURCE_REAUTH
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    mock_restore_cache_with_extra_data,
+)
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
@@ -19,6 +22,9 @@ from .conftest import (
 )
 
 SUBSERVICES_URL = f"{API_URL}/v7/accounts/providers/{PROVIDER_ID}/subservices"
+DETAILS_URL = f"{API_URL}/v7/accounts/{ACCOUNT_ID}/details"
+METERS_URL = f"{API_URL}/v6/accounts/{ACCOUNT_ID}/meters/info"
+RATE = "sensor.pesc_00000abc12_2_rate"
 
 
 async def _setup(hass, aioclient_mock, config_entry) -> None:
@@ -202,3 +208,163 @@ async def test_update_value_throws(
     else:
         await call
         assert "Показания не приняты" in caplog.text
+
+
+async def _refresh(hass, aioclient_mock, config_entry, url, **kwargs) -> None:
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(url, **(kwargs or {"status": 404}))
+    mock_data(aioclient_mock)
+    await hass.data[const.DOMAIN][config_entry.entry_id].async_refresh()
+    await hass.async_block_till_done()
+
+
+async def test_rate_date(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    await _setup(hass, aioclient_mock, config_entry)
+
+    rate = hass.states.get(RATE)
+    assert float(rate.state) == 6.08
+    assert rate.attributes["date"]
+
+
+@pytest.mark.parametrize("url", [DETAILS_URL, METERS_URL])
+async def test_rate_kept_on_error(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    url: str,
+) -> None:
+    await _setup(hass, aioclient_mock, config_entry)
+    before = hass.states.get(RATE)
+
+    await _refresh(hass, aioclient_mock, config_entry, url)
+
+    if url == DETAILS_URL:
+        assert "Failed load tariffs" in caplog.text
+
+    rate = hass.states.get(RATE)
+    attrs = dict(rate.attributes)
+    # ошибка всего обновления
+    assert attrs.pop("assumed_state", False) == (url == METERS_URL)
+    assert rate.state == before.state
+    assert attrs == before.attributes
+    assert float(hass.states.get("sensor.pesc_00000abc12_2").state) == 12345
+
+
+async def test_rate_restored(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    attrs = {
+        "tariff_kind": "Двухтарифный",
+        "tariff_rate_name": "День",
+        "tariff_rate_detail": "07:00 — 23:00",
+        "date": "2026-10-01T10:00:00+03:00",
+    }
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(RATE, "6.08", attrs | {"friendly_name": "old"}),
+                {"native_value": 6.08, "native_unit_of_measurement": "RUB/kWh"},
+            )
+        ],
+    )
+    aioclient_mock.get(DETAILS_URL, status=404)
+
+    await _setup(hass, aioclient_mock, config_entry)
+
+    rate = hass.states.get(RATE)
+    assert float(rate.state) == 6.08
+    assert {key: rate.attributes.get(key) for key in attrs} == attrs
+    assert rate.attributes["friendly_name"] != "old"
+
+
+async def test_rate_not_restored_over_fresh(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(RATE, "1.0", {"date": "2026-10-01T10:00:00+03:00"}),
+                {"native_value": 1.0, "native_unit_of_measurement": "RUB/kWh"},
+            )
+        ],
+    )
+
+    await _setup(hass, aioclient_mock, config_entry)
+
+    rate = hass.states.get(RATE)
+    assert float(rate.state) == 6.08
+    assert rate.attributes["date"] != "2026-10-01T10:00:00+03:00"
+
+
+async def test_rate_cleared_without_tariff(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    await _setup(hass, aioclient_mock, config_entry)
+
+    await _refresh(hass, aioclient_mock, config_entry, DETAILS_URL, json=[])
+
+    rate = hass.states.get(RATE)
+    assert rate.state == "unknown"
+    assert "date" not in rate.attributes
+    assert "tariff_kind" not in rate.attributes
+
+
+async def test_rate_restored_dropped(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(RATE, "6.08", {"date": "2026-10-01T10:00:00+03:00"}),
+                {"native_value": 6.08, "native_unit_of_measurement": "RUB/kWh"},
+            )
+        ],
+    )
+    aioclient_mock.get(DETAILS_URL, status=404)
+    await _setup(hass, aioclient_mock, config_entry)
+    assert float(hass.states.get(RATE).state) == 6.08
+
+    await _refresh(hass, aioclient_mock, config_entry, DETAILS_URL, json=[])
+
+    rate = hass.states.get(RATE)
+    assert rate.state == "unknown"
+    assert "date" not in rate.attributes
+
+
+async def test_rate_not_restored_when_loaded(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(RATE, "6.08", {"date": "2026-10-01T10:00:00+03:00"}),
+                {"native_value": 6.08, "native_unit_of_measurement": "RUB/kWh"},
+            )
+        ],
+    )
+    aioclient_mock.get(DETAILS_URL, json=[])
+
+    await _setup(hass, aioclient_mock, config_entry)
+
+    rate = hass.states.get(RATE)
+    assert rate.state == "unknown"
+    assert "date" not in rate.attributes

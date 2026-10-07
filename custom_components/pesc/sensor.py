@@ -224,11 +224,19 @@ class PescMeterSensor(_PescMeterSensor):
             return {"code": -1, "message": f"Ошибка соединения: {err}"}
 
 
-class PescRateSensor(_PescMeterSensor):
+class PescRateSensor(_PescMeterSensor, sensor.RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_translation_key = "meter"
     _attr_icon = "mdi:currency-rub"
+    _restored_value: Optional[float | str] = None
+    _RESTORED_ATTRS = (
+        "tariff_kind",
+        "tariff_rate_name",
+        "tariff_rate_detail",
+        "tariff_rate_description",
+        "date",
+    )
 
     def __init__(
         self,
@@ -261,9 +269,17 @@ class PescRateSensor(_PescMeterSensor):
     def _update_state_attributes(self):
         self._attr_name = f"Тариф {self.meter.name}"
 
-        if tariff := self.coordinator.api.tariff(self.meter):
+        tariff = self.api.tariff(self.meter)
+        if tariff is None:
+            # восстановленное держим, пока тарифы не получены
+            if self._restored_value is None or self.api.tariffs_loaded(self.meter):
+                self._restored_value = None
+                self._attr_extra_state_attributes = {}
+        else:
+            self._restored_value = None
             self._attr_extra_state_attributes = {
                 "tariff_kind": tariff.kind,
+                "date": tariff.date.isoformat() if tariff.date else None,
             }
             if rate := tariff.rate(self.meter):
                 self._attr_extra_state_attributes["tariff_rate_name"] = rate.name
@@ -281,6 +297,21 @@ class PescRateSensor(_PescMeterSensor):
         """Return the value of the sensor."""
         tariff = self.coordinator.api.tariff(self.meter)
         if tariff is None:
-            return None
+            return self._restored_value
         rate = tariff.rate(self.meter)
         return rate.value if rate else None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.api.tariffs_loaded(self.meter):
+            return
+        data = await self.async_get_last_sensor_data()
+        state = await self.async_get_last_state()
+        if data is None or data.native_value is None or state is None:
+            return
+        self._restored_value = data.native_value
+        self._attr_extra_state_attributes = {
+            key: state.attributes[key]
+            for key in self._RESTORED_ATTRS
+            if key in state.attributes
+        }

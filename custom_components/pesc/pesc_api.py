@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from homeassistant.util import slugify
+from homeassistant.util import dt as dt_util, slugify
 
 from . import pesc_client
 
@@ -133,7 +133,7 @@ class TariffRate:
 
 
 class Tariff:
-    __slots__ = ("name", "kind", "rates")
+    __slots__ = ("name", "kind", "rates", "date")
 
     name: str
     """ Например: "Холодное водоснабжение" или "Горячее водоснабжение" и т.д. """
@@ -143,15 +143,19 @@ class Tariff:
 
     rates: list[TariffRate]
 
+    date: Optional[datetime]
+    """Когда получен"""
+
     def __init__(self, name: str, kind: str, rates: list[TariffRate]) -> None:
         self.name = name
         self.kind = kind
         self.rates = rates
+        self.date = None
 
     def __repr__(self) -> str:
         return (
             self.__class__.__name__
-            + f"[name={self.name}, kind={self.kind}, rates={self.rates}]"
+            + f"[name={self.name}, kind={self.kind}, rates={self.rates}, date={self.date}]"
         )
 
     def rate(self, meter: MeterInd) -> Optional[TariffRate]:
@@ -193,15 +197,22 @@ class Tariff:
         return None
 
 
+class _Data:
+    __slots__ = ("meters", "tariffs", "subservices")
+
+    def __init__(self) -> None:
+        self.meters: List[MeterInd] = []
+        self.tariffs: Dict[int, list[Tariff]] = {}
+        self.subservices: Dict[int, pesc_client.Subservice] = {}
+
+
 class PescApi:
     def __init__(self, client: pesc_client.PescClient) -> None:
         # _LOGGER.debug("Initialize %s", client.token)
         self.client = client
         self._profile: Optional[pesc_client.Profile] = None
-        self._meters: List[MeterInd] = []
+        self._data = _Data()
         self._groups: List[Group] = []
-        self._tariffs: Dict[int, list[Tariff]] = {}
-        self._subservices: Dict[int, pesc_client.Subservice] = {}
 
     async def async_login(
         self, username: str, password: str, login_type: str
@@ -288,7 +299,6 @@ class PescApi:
 
     async def async_fetch_profile(self) -> None:
         _LOGGER.debug("Fetch profile")
-        self._profile = None
         self._profile = await self.client.async_profile()
 
     async def async_fetch_data(self) -> None:
@@ -300,29 +310,29 @@ class PescApi:
           - pesc_client.ClientError
         """
         _LOGGER.debug("Fetch data")
-        self._meters.clear()
-        self._groups.clear()
-        self._tariffs.clear()
-        self._subservices.clear()
-
+        # при ошибке остаются прежние данные
+        data = _Data()
         accounts = await self.client.async_accounts()
-        await asyncio.gather(*(self._load_account(account) for account in accounts))
+        await asyncio.gather(
+            *(self._load_account(account, data) for account in accounts)
+        )
+        self._data = data
 
-    async def _load_account(self, account: pesc_client.Account):
+    async def _load_account(self, account: pesc_client.Account, data: _Data):
         acc = Account(account)
         _LOGGER.debug("Got %s", acc)
         await asyncio.gather(
             self._load_reading_types(acc),
             self._load_address(acc),
-            self._load_meters(acc),
-            self._load_tariffs(acc),
+            self._load_meters(acc, data),
+            self._load_tariffs(acc, data),
         )
         # справочник нужен, только если счётчик пришёл без subservice
         if any(
-            ind.account is acc and ind.meter.subservice_id not in self._subservices
-            for ind in self._meters
+            ind.account is acc and ind.meter.subservice_id not in data.subservices
+            for ind in data.meters
         ):
-            await self._load_subservices(acc)
+            await self._load_subservices(acc, data)
 
     async def _load_reading_types(self, acc: Account):
         acc.type = await self.client.async_reading_type(acc.id)
@@ -332,18 +342,18 @@ class PescApi:
         if address and "value" in address:
             acc.address = address["value"]
 
-    async def _load_meters(self, acc: Account):
+    async def _load_meters(self, acc: Account, data: _Data):
         meters = await self.client.async_meters(acc.id)
         for meter in meters:
             met = Meter(meter)
             if subservice := meter.get("subservice"):
                 # id приходит строкой, в справочнике числом
-                self._subservices[met.subservice_id] = subservice | {
+                data.subservices[met.subservice_id] = subservice | {
                     "id": int(subservice["id"])
                 }
             for met_ind in meter["indications"]:
                 ind = MeterInd(acc, met, met_ind)
-                self._meters.append(ind)
+                data.meters.append(ind)
                 _LOGGER.debug("Got %s", ind)
 
     def _process_tariff_detail(self, detail: dict):
@@ -394,35 +404,39 @@ class PescApi:
 
         return None
 
-    async def _load_tariffs(self, acc: Account):
+    async def _load_tariffs(self, acc: Account, data: _Data):
         try:
-            for detail in await self.client.async_details(acc.id):
-                tariff = self._process_tariff_detail(detail)
-                if not tariff:
-                    continue
-                if acc.id not in self._tariffs:
-                    self._tariffs[acc.id] = []
-                self._tariffs[acc.id].append(tariff)
-                _LOGGER.debug("Got %s", tariff)
-        except pesc_client.ClientError:
-            # no details returned. iе is sometimes normal
-            pass
+            details = await self.client.async_details(acc.id)
+        except pesc_client.ClientError as err:
+            _LOGGER.warning("Failed load tariffs for account %d: %s", acc.id, err)
+            if acc.id in self._data.tariffs:
+                data.tariffs[acc.id] = self._data.tariffs[acc.id]
+            return
+        date = dt_util.now()
+        data.tariffs[acc.id] = []
+        for detail in details:
+            tariff = self._process_tariff_detail(detail)
+            if not tariff:
+                continue
+            tariff.date = date
+            data.tariffs[acc.id].append(tariff)
+            _LOGGER.debug("Got %s", tariff)
 
-    async def _load_subservices(self, acc: Account):
+    async def _load_subservices(self, acc: Account, data: _Data):
         try:
             subservices = await self.client.async_subservices(acc.service_provider_id)
-            for subservice in subservices:
-                for meter in self._meters:
-                    if meter.meter.subservice_id == subservice["id"]:
-                        self._subservices[subservice["id"]] = subservice
-                        break
-
         except pesc_client.ClientError as err:
             _LOGGER.error(
                 "Failed load subservices for service provider %d: %s",
                 acc.service_provider_id,
                 err,
             )
+            subservices = self._data.subservices.values()
+        for subservice in subservices:
+            for meter in data.meters:
+                if meter.meter.subservice_id == subservice["id"]:
+                    data.subservices[subservice["id"]] = subservice
+                    break
 
     async def async_fetch_groups(self) -> None:
         _LOGGER.debug("Fetch groups")
@@ -458,7 +472,7 @@ class PescApi:
         Returns meters without duplicates. A values with an older account will be skipped.
         """
         meters: dict[str, MeterInd] = {}
-        for meter in sorted(self._meters, key=lambda x: f"{x.account.id}_{x.id}"):
+        for meter in sorted(self._data.meters, key=lambda x: f"{x.account.id}_{x.id}"):
             meters[meter.id] = meter
         return list(meters.values())
 
@@ -470,11 +484,14 @@ class PescApi:
         subservice = self.subservice(ind.meter.subservice_id)
         if not subservice:
             return None
-        tariffs = self._tariffs.get(ind.account.id, [])
+        tariffs = self._data.tariffs.get(ind.account.id, [])
         for tariff in tariffs:
             if tariff.name == subservice["name"]:
                 return tariff
         return None
+
+    def tariffs_loaded(self, ind: MeterInd) -> bool:
+        return ind.account.id in self._data.tariffs
 
     def find_ind(self, ind_id: str) -> Optional[MeterInd]:
         for ind in self.meters:
@@ -483,4 +500,4 @@ class PescApi:
         return None
 
     def subservice(self, subservice_id: int) -> Optional[pesc_client.Subservice]:
-        return self._subservices.get(subservice_id, None)
+        return self._data.subservices.get(subservice_id, None)

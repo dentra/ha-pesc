@@ -3,16 +3,11 @@
 import logging
 from typing import Callable, Optional
 
+import aiohttp
 from homeassistant.components import sensor
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfVolume
-from homeassistant.core import (
-    HomeAssistant,
-    HomeAssistantError,
-    ServiceResponse,
-    callback,
-)
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -98,11 +93,6 @@ class _PescMeterSensor(_PescBaseSensor):
         )
         self.meter = meter
         self._update_state_attributes()
-
-    async def async_update_value(
-        self, values: list[pesc_client.UpdateValuePayload], return_response: bool = True
-    ) -> ServiceResponse:
-        """nothing to do with RO value"""
 
     def _update_state_attributes(self):
         pass
@@ -195,53 +185,35 @@ class PescMeterSensor(_PescMeterSensor):
     def __str__(self):
         return f"{self.meter.value}"
 
-    async def async_update_value(
-        self, values: list[pesc_client.UpdateValuePayload], return_response: bool = True
-    ) -> ServiceResponse:
-        _LOGGER.debug('[%s]: Updating "%s" to %s', self.entity_id, self.name, values)
-
+    def check_value(self, value: int) -> Optional[dict]:
+        """Return a service response error if the value can't be sent."""
         if self.meter.auto:
             msg = "Показания передаются в автоматическом режиме"
-            if not return_response:
-                raise HomeAssistantError(msg)
             return {"code": -2, "message": msg}
+        if self.meter.value is not None and value < self.meter.value:
+            msg = f"Новое значение {value} меньше предыдущего {self.meter.value}"
+            return {"code": -3, "message": msg}
+        return None
 
-        for value in values:
-            if value["scaleId"] == self.meter.scale_id and value["value"] < self.state:
-                msg = f"Новое значение {value['value']} меньше предыдущего {self.meter.value}"
-                if not return_response:
-                    raise HomeAssistantError(msg)
-                return {"code": -3, "message": msg, "values": values}
-
-        res = await self._async_send_values(values, return_response)
-        await self.async_update()
-        return res
-
-    async def _async_send_values(
-        self,
-        values: list[pesc_client.UpdateValuePayload],
-        return_response: bool,
-    ) -> ServiceResponse:
+    async def async_send_values(
+        self, values: list[pesc_client.UpdateValuePayload]
+    ) -> dict:
+        """Send readings of this meter, errors are returned as a response."""
+        _LOGGER.debug('[%s]: Updating "%s" to %s', self.entity_id, self.name, values)
         try:
             payload = await self.coordinator.async_with_relogin(
                 lambda: self.api.async_update_value(self.meter, values)
             )
             _LOGGER.debug('[%s] Update "%s" success', self.entity_id, self.name)
-            return {
-                "code": 0,
-                "message": "Операция выполнена успешно",
-                "payload": payload,
-            }
+            return {"code": 0, "message": const.MESSAGE_SUCCESS, "payload": payload}
         except pesc_client.ClientAuthError as err:
             # из сервиса reauth сам не стартует
             self.coordinator.config_entry.async_start_reauth(self.hass)
-            if not return_response:
-                raise ConfigEntryAuthFailed from err
             return {"code": err.code, "message": err.message}
         except pesc_client.ClientError as err:
-            if not return_response:
-                raise HomeAssistantError(f"Ошибка вызова API: {err}") from err
             return {"code": err.code, "message": err.message}
+        except (aiohttp.ClientError, TimeoutError) as err:
+            return {"code": -1, "message": f"Ошибка соединения: {err}"}
 
 
 class PescRateSensor(_PescMeterSensor):

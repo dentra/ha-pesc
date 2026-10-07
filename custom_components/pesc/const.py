@@ -14,6 +14,7 @@ CONF_LOGIN_TYPE: Final = "login_type"
 CONF_USERNAME: Final = "username"
 CONF_PASSWORD: Final = "password"
 CONF_VALUE: Final = "value"
+CONF_VALUES: Final = "values"
 CONF_SCALE_ID: Final = "scale_id"
 CONF_UPDATE_INTERVAL: Final = "update_interval"
 CONF_DIAGNOSTIC_SENSORS: Final = "diagnostic_sensors"
@@ -22,6 +23,8 @@ CONF_RATES_SENSORS: Final = "rates_sensors"
 DEFAULT_UPDATE_INTERVAL: Final = datetime.timedelta(hours=12)
 
 CURRENCY_RUB: Final = "RUB"
+
+MESSAGE_SUCCESS: Final = "Операция выполнена успешно"
 
 
 class PescEntityFeature(IntFlag):

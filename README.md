@@ -33,41 +33,55 @@
 
 ## Изменение значений
 
-Используйте визульный редактор и службу `pesc.update_value`
-
-Или воспользуйтесь примером ниже:
+Используйте визуальный редактор и действие `pesc.update_value`: в поле «Показания по сенсорам» добавьте сенсоры и их значения.
+Показания группируются по счётчикам, по одному запросу на счётчик.
 
 ```yaml
-service: pesc.update_value
+alias: Отправка показаний
+sequence:
+  - action: pesc.update_value
+    data:
+      values:
+        - entity_id: sensor.pesc_0123456789_2
+          value: 12345
+        - entity_id: sensor.pesc_0123456789_3
+          value: 6789
+        - entity_id: sensor.pesc_9876543210_1
+          value: 202
+    response_variable: response
+  - condition: template
+    value_template: "{{ response.code == 0 }}"
+  - action: notify.notify_me
+    data:
+      message: Показания успешно переданы
+```
+
+Если один из счётчиков не принял показания, остальные всё равно передаются.
+В ответе `code` равен 0, если приняты все показания, иначе это код первой ошибки, а в `results` результат по каждому счётчику.
+С `throws: false` ошибка не прерывает скрипт, а только пишется в журнал.
+
+Прежний формат по-прежнему поддерживается в YAML:
+
+```yaml
+action: pesc.update_value
 target:
   entity_id: sensor.pesc_0123456789_1
 data:
   value: 12345
 ```
 
-Или обновление сразу по всем тарифам и проверка кода завершения:
-
 ```yaml
-alias: Отправка показаний
-sequence:
-  - service: pesc.update_value
-    target:
-      entity_id:
-        - sensor.pesc_0123456789_2
-        - sensor.pesc_0123456789_3
-    data:
-      value:
-        - scale_id: 2
-          value: 12345
-        - scale_id: 3
-          value: 6789
-    response_variable: response
-    enabled: true
-  - condition: template
-    value_template: "{{ response.code == 0 }}"
-  - service: notify.notify_me
-    data:
-      message: Показания успешно переданы
+action: pesc.update_value
+target:
+  entity_id:
+    - sensor.pesc_0123456789_2
+    - sensor.pesc_0123456789_3
+data:
+  value:
+    - scale_id: 2
+      value: 12345
+    - scale_id: 3
+      value: 6789
 ```
 
 ## Получение стоимости тарифа

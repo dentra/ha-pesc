@@ -1,27 +1,34 @@
 update_value:
   name: Update Energy Value
-  description: Update energy meter readings. Call this service twice for every rate readings.
-  target:
-    entity:
-      integration: pesc
-      domain: sensor
-      supported_features:
-        # don't know how to pass custom_component flag. Use with same value from climate.
-        # - pesc.const.PescEntityFeature.MANUAL
-        - climate.ClimateEntityFeature.TARGET_TEMPERATURE
-
+  description: Send meter readings, one request per meter.
   fields:
-    value:
-      name: Value
-      description: The new meter readings to set
-      example: "0"
+    values:
+      name: Values
+      description: Readings per sensor, one request per meter
       required: true
       selector:
-        number:
-          min: 1
-          max: 999999
-#          unit_of_measurement: kWh
-          mode: box
+        object:
+          multiple: true
+          label_field: entity_id
+          description_field: value
+          translation_key: values
+          fields:
+            entity_id:
+              required: true
+              selector:
+                entity:
+                  filter:
+                    integration: pesc
+                    domain: sensor
+                    supported_features:
+                      - climate.ClimateEntityFeature.TARGET_TEMPERATURE
+            value:
+              required: true
+              selector:
+                number:
+                  min: 1
+                  max: 999999
+                  mode: box
     throws:
       name: Throws
       description: Raise an error if the readings were not accepted

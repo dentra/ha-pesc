@@ -453,19 +453,25 @@ async def general_options_schema(
 def _pesc_entities(
     handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
 ) -> list[er.RegistryEntry]:
-    registry = er.async_get(handler.parent_handler.hass)
-    return [reg for reg in registry.entities.values() if reg.platform == const.DOMAIN]
+    hass = handler.parent_handler.hass
+    registry = er.async_get(hass)
+    return [
+        reg
+        for entry in hass.config_entries.async_entries(const.DOMAIN)
+        for reg in er.async_entries_for_config_entry(registry, entry.entry_id)
+    ]
 
 
 def _manual_meters(
     handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
 ) -> list[str]:
+    registry = er.async_get(handler.parent_handler.hass)
     entry_id = handler.parent_handler.config_entry.entry_id
     return [
         reg.entity_id
-        for reg in _pesc_entities(handler)
-        if reg.config_entry_id == entry_id
-        and reg.domain == "sensor"
+        for reg in er.async_entries_for_config_entry(registry, entry_id)
+        if reg.domain == "sensor"
+        and not reg.disabled
         and reg.supported_features & const.PescEntityFeature.MANUAL
     ]
 

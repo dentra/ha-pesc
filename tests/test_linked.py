@@ -378,3 +378,21 @@ async def test_options_links_missing_meter(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert config_entry.options[const.CONF_LINKS] == LINKS[:1]
     assert config_entry.options[const.CONF_RATES_SENSORS] is False
+
+
+async def test_options_links_disabled_meter(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    await _setup(hass, aioclient_mock, config_entry, {})
+    er.async_get(hass).async_update_entity(
+        DAY, disabled_by=er.RegistryEntryDisabler.USER
+    )
+
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {const.CONF_LINKS: LINKS[:1]}
+        )

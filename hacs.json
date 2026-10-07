@@ -2,5 +2,7 @@
   "name": "Pesc (PSC/EIRC)",
   "render_readme": true,
   "country": "RU",
-  "homeassistant": "2025.10.0"
+  "homeassistant": "2025.10.0",
+  "zip_release": true,
+  "filename": "pesc.zip"
 }

@@ -15,7 +15,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
 
 from . import const, pesc_client
-from .sensor import _PescMeterSensor
+from .sensor import PescMeterSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,10 +61,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
 
         meter_id = ""
         for entity in entities:
-            if not isinstance(entity, _PescMeterSensor):
-                raise ServiceValidationError(
-                    "Должна быть выбрана цель типа PescMeterSensor"
-                )
+            if not isinstance(entity, PescMeterSensor):
+                raise ServiceValidationError("Цель должна быть сенсором показаний")
             if entity.meter.auto:
                 raise ServiceValidationError(
                     "Показания цели передаются в автоматическом режиме"
@@ -81,7 +79,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
             # most likely call from gui
             if len(entities) != 1:
                 raise ServiceValidationError("Должна быть выбрана только одна цель")
-            entity: _PescMeterSensor = entities[0]
+            entity: PescMeterSensor = entities[0]
             values = [{const.CONF_SCALE_ID: entity.meter.scale_id, "value": values}]
 
         if len(entities) != len(values):
@@ -89,7 +87,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 "Количество целей должно соответствовать количеству сущностей"
             )
 
-        entity: _PescMeterSensor = entities[0]
+        entity: PescMeterSensor = entities[0]
         return await entity.async_update_value(
             [
                 pesc_client.UpdateValuePayload(

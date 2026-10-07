@@ -1,6 +1,7 @@
 import pytest
 from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
@@ -155,3 +156,20 @@ async def test_update_value_without_password(
     assert response["code"] == "5"
     flows = hass.config_entries.flow.async_progress()
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+async def test_update_value_rate_sensor_rejected(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    await _setup(hass, aioclient_mock, config_entry)
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            const.DOMAIN,
+            const.SERVICE_UPDATE_VALUE,
+            {"entity_id": "sensor.pesc_00000abc12_2_rate", "value": 12346},
+            blocking=True,
+            return_response=True,
+        )

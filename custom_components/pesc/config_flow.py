@@ -10,13 +10,16 @@ from typing import Any, Dict, Final, Optional
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowError, FlowResult
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.schema_config_entry_flow import (
     SchemaConfigFlowHandler,
+    SchemaFlowError,
     SchemaFlowFormStep,
     SchemaFlowMenuStep,
     SchemaOptionsFlowHandler,
@@ -25,6 +28,7 @@ from homeassistant.helpers.schema_config_entry_flow import (
 from homeassistant.util import slugify
 
 from . import const, pesc_api, pesc_client
+from .services import linked_preview
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -446,8 +450,88 @@ async def general_options_schema(
     )
 
 
+def _pesc_entities(
+    handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
+) -> list[er.RegistryEntry]:
+    registry = er.async_get(handler.parent_handler.hass)
+    return [reg for reg in registry.entities.values() if reg.platform == const.DOMAIN]
+
+
+def _manual_meters(
+    handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
+) -> list[str]:
+    entry_id = handler.parent_handler.config_entry.entry_id
+    return [
+        reg.entity_id
+        for reg in _pesc_entities(handler)
+        if reg.config_entry_id == entry_id
+        and reg.domain == "sensor"
+        and reg.supported_features & const.PescEntityFeature.MANUAL
+    ]
+
+
+async def links_options_schema(
+    handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
+) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Optional(const.CONF_LINKS): selector.ObjectSelector(
+                selector.ObjectSelectorConfig(
+                    multiple=True,
+                    label_field=ATTR_ENTITY_ID,
+                    description_field=const.CONF_SOURCE,
+                    translation_key=const.CONF_LINKS,
+                    fields={
+                        ATTR_ENTITY_ID: {
+                            "required": True,
+                            "selector": selector.EntitySelector(
+                                selector.EntitySelectorConfig(
+                                    include_entities=_manual_meters(handler)
+                                )
+                            ),
+                        },
+                        const.CONF_SOURCE: {
+                            "required": True,
+                            "selector": selector.EntitySelector(
+                                selector.EntitySelectorConfig(
+                                    domain=["sensor", "input_number"],
+                                    exclude_entities=[
+                                        reg.entity_id for reg in _pesc_entities(handler)
+                                    ],
+                                )
+                            ),
+                        },
+                    },
+                )
+            ),
+        }
+    )
+
+
+async def validate_links(
+    handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
+    user_input: dict[str, Any],
+) -> dict[str, Any]:
+    meters = [link[ATTR_ENTITY_ID] for link in user_input.get(const.CONF_LINKS, [])]
+    if len(meters) != len(set(meters)):
+        raise SchemaFlowError("duplicate_link")
+    return user_input
+
+
+async def links_preview(
+    handler: SchemaConfigFlowHandler | SchemaOptionsFlowHandler,
+) -> dict[str, str]:
+    entry_id = handler.parent_handler.config_entry.entry_id
+    return {"preview": linked_preview(handler.parent_handler.hass, entry_id)}
+
+
 OPTIONS_FLOW: Dict[str, SchemaFlowFormStep | SchemaFlowMenuStep] = {
-    "init": SchemaFlowFormStep(general_options_schema),
+    "init": SchemaFlowFormStep(general_options_schema, next_step="links"),
+    "links": SchemaFlowFormStep(
+        links_options_schema,
+        validate_user_input=validate_links,
+        description_placeholders=links_preview,
+    ),
 }
 
 

@@ -67,7 +67,17 @@
           "diagnostic_sensors": "Sensors in diagnostic mode",
           "rates_sensors": "Additional rates sensors"
         }
+      },
+      "links": {
+        "title": "Reading sources",
+        "description": "Link meters to sensors of other integrations. Readings are sent with a button or the “Send linked readings” action.\n\n{preview}",
+        "data": {
+          "links": "Links"
+        }
       }
+    },
+    "error": {
+      "duplicate_link": "Meter is linked more than once"
     }
   },
   "selector": {
@@ -90,6 +100,12 @@
         "entity_id": "Sensor",
         "value": "Value"
       }
+    },
+    "links": {
+      "fields": {
+        "entity_id": "Meter",
+        "source": "Source"
+      }
     }
   },
   "services": {
@@ -105,6 +121,23 @@
           "name": "Raise errors",
           "description": "Fail the action if the readings were not accepted. If disabled, the error is only logged"
         }
+      }
+    },
+    "send_linked": {
+      "name": "Send linked readings",
+      "description": "Send readings of the linked source sensors, one request per meter.",
+      "fields": {
+        "throws": {
+          "name": "Raise errors",
+          "description": "Fail the action if the readings were not accepted. If disabled, the error is only logged"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "send_linked": {
+        "name": "Send readings"
       }
     }
   }

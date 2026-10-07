@@ -1,11 +1,12 @@
 """Service actions"""
 
 import logging
+import math
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components import sensor
-from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_UNIT_OF_MEASUREMENT
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
@@ -14,6 +15,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_platform
+from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
 
 from . import const, pesc_client
 from .sensor import PescMeterSensor
@@ -21,6 +23,7 @@ from .sensor import PescMeterSensor
 _LOGGER = logging.getLogger(__name__)
 
 _SCHEMA_VALUE = vol.All(vol.Coerce(int), vol.Range(min=1))
+_THROWS = {vol.Optional("throws", default=True): cv.boolean}
 
 _UPDATE_VALUE_SCHEMA = vol.All(
     vol.Schema(
@@ -48,7 +51,7 @@ _UPDATE_VALUE_SCHEMA = vol.All(
                     )
                 ],
             ),
-            vol.Optional("throws", default=True): cv.boolean,
+            **_THROWS,
         }
     ),
     cv.has_at_least_one_key(const.CONF_VALUE, const.CONF_VALUES),
@@ -71,25 +74,16 @@ def async_setup_services(hass: HomeAssistant) -> None:
             readings = await _target_readings(hass, service_call)
 
         results = await _async_send(readings)
-
-        failed = [result for result in results if result["code"] != 0]
-        throws = service_call.data["throws"]
-        for result in failed if not throws else []:
-            _LOGGER.warning("Показания не переданы: %s", result["message"])
-        if failed and throws and not service_call.return_response:
-            raise HomeAssistantError("; ".join(result["message"] for result in failed))
-        if not service_call.return_response:
-            return None
-
-        if const.CONF_VALUES not in service_call.data:
+        response = _response(results, service_call)
+        if response is not None and const.CONF_VALUES not in service_call.data:
             # прежний формат ответа: цели всегда одного счётчика
             results[0].pop("entity_ids")
             return results[0]
-        return {
-            "code": failed[0]["code"] if failed else 0,
-            "message": failed[0]["message"] if failed else const.MESSAGE_SUCCESS,
-            "results": results,
-        }
+        return response
+
+    async def async_execute_send_linked(service_call: ServiceCall) -> ServiceResponse:
+        results = await async_send_linked(hass)
+        return _response(results, service_call)
 
     hass.services.async_register(
         const.DOMAIN,
@@ -98,6 +92,148 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _UPDATE_VALUE_SCHEMA,
         SupportsResponse.OPTIONAL,
     )
+    hass.services.async_register(
+        const.DOMAIN,
+        const.SERVICE_SEND_LINKED,
+        async_execute_send_linked,
+        vol.Schema(_THROWS),
+        SupportsResponse.OPTIONAL,
+    )
+
+
+def _response(results: list[dict], service_call: ServiceCall) -> ServiceResponse:
+    failed = failed_results(results)
+    throws = service_call.data["throws"]
+    for result in failed if not throws else []:
+        _LOGGER.warning("Показания не переданы: %s", result["message"])
+    if failed and throws and not service_call.return_response:
+        raise HomeAssistantError(failure_message(failed))
+    if not service_call.return_response:
+        return None
+    return {
+        "code": failed[0]["code"] if failed else 0,
+        "message": failed[0]["message"] if failed else const.MESSAGE_SUCCESS,
+        "results": results,
+    }
+
+
+def failed_results(results: list[dict]) -> list[dict]:
+    return [result for result in results if result["code"] != 0]
+
+
+def failure_message(failed: list[dict]) -> str:
+    return "; ".join(result["message"] for result in failed)
+
+
+async def async_send_linked(
+    hass: HomeAssistant, entry_id: str | None = None, account_id: int | None = None
+) -> list[dict]:
+    """Send readings of linked source sensors."""
+    sensors = _meter_sensors(hass)
+    readings: _Readings = []
+    results = []
+    for entry in hass.config_entries.async_loaded_entries(const.DOMAIN):
+        if entry_id is not None and entry.entry_id != entry_id:
+            continue
+        for link in entry.options.get(const.CONF_LINKS, []):
+            entity = sensors.get(link[ATTR_ENTITY_ID])
+            if entity is None:
+                # у кнопки свой счёт, без счётчика его не определить
+                if account_id is None:
+                    results.append(_missing_meter(link))
+                continue
+            if account_id is not None and entity.meter.account.id != account_id:
+                continue
+            try:
+                readings.append((entity, _source_value(hass, entity, link)))
+            except _SourceError as err:
+                results.append({"entity_ids": [entity.entity_id], **err.response})
+
+    if not readings and not results:
+        raise ServiceValidationError("Нет связанных сенсоров")
+    return results + await _async_send(readings)
+
+
+def linked_preview(hass: HomeAssistant, entry_id: str) -> str:
+    """Describe what send_linked would send for the entry."""
+    entry = hass.config_entries.async_get_entry(entry_id)
+    sensors = _meter_sensors(hass)
+    lines = []
+    for link in entry.options.get(const.CONF_LINKS, []) if entry else []:
+        entity = sensors.get(link[ATTR_ENTITY_ID])
+        if entity is None:
+            lines.append(
+                f"- **{link[ATTR_ENTITY_ID]}**: {_missing_meter(link)['message']}"
+            )
+            continue
+        source = hass.states.get(link[const.CONF_SOURCE])
+        source_name = source.name if source else link[const.CONF_SOURCE]
+        try:
+            value = _source_value(hass, entity, link)
+            if error := entity.check_value(value):
+                text = error["message"]
+            else:
+                text = f"{value} (сейчас {_number(entity.meter.value)})"
+        except _SourceError as err:
+            text = err.response["message"]
+        name = entity.name if isinstance(entity.name, str) else entity.entity_id
+        lines.append(f"- **{name}**: {text} ← {source_name}")
+    return "\n".join(["Сейчас будет передано:", *lines]) if lines else ""
+
+
+def _missing_meter(link: dict) -> dict:
+    message = f"Счетчик {link[ATTR_ENTITY_ID]} не найден"
+    return {"entity_ids": [link[ATTR_ENTITY_ID]], "code": -6, "message": message}
+
+
+def _number(value: float | None) -> str:
+    if value is None:
+        return "нет"
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+class _SourceError(Exception):
+    def __init__(self, code: int, message: str) -> None:
+        super().__init__(message)
+        self.response = {"code": code, "message": message}
+
+
+def _source_value(hass: HomeAssistant, entity: PescMeterSensor, link: dict) -> int:
+    source = link[const.CONF_SOURCE]
+    state = hass.states.get(source)
+    try:
+        value = float(state.state) if state is not None else None
+    except ValueError:
+        value = None
+    if value is None:
+        raise _SourceError(-4, f"Источник {source} недоступен")
+    if not math.isfinite(value):
+        raise _SourceError(
+            -4, f"Источник {source}: некорректное значение {state.state}"
+        )
+
+    unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+    target = entity.native_unit_of_measurement
+    if unit and target and unit != target:
+        converter = next(
+            (
+                conv
+                for conv in (EnergyConverter, VolumeConverter)
+                if unit in conv.VALID_UNITS and target in conv.VALID_UNITS
+            ),
+            None,
+        )
+        if converter is None:
+            msg = f"Единица {unit} источника {source} не подходит к {target}"
+            raise _SourceError(-5, msg)
+        value = converter.convert(value, unit, target)
+    # погрешность пересчёта не должна отнимать единицу
+    reading = math.floor(round(value, 6))
+    if reading < 1:
+        raise _SourceError(
+            -4, f"Источник {source}: некорректное значение {state.state}"
+        )
+    return reading
 
 
 def _meter_sensors(hass: HomeAssistant) -> dict[str, PescMeterSensor]:

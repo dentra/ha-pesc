@@ -19,6 +19,14 @@ from .coordinator import PescDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+def meter_unique_id(meter: pesc_api.MeterInd) -> str:
+    return f"{const.DOMAIN}_{meter.id}"
+
+
+def sensor_entity_id(unique_id: str) -> str:
+    return f"sensor.{slugify(unique_id)}"
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: Callable
 ):
@@ -70,7 +78,7 @@ class _PescBaseSensor(
             # hw_version="",
         )
 
-        self.entity_id = f"sensor.{slugify(self._attr_unique_id)}"
+        self.entity_id = sensor_entity_id(self._attr_unique_id)
 
     @property
     def api(self) -> pesc_api.PescApi:
@@ -87,7 +95,7 @@ class _PescMeterSensor(_PescBaseSensor):
         super().__init__(
             coordinator,
             meter.account.id,
-            f"{const.DOMAIN}_{meter.id}{id_suffix}",
+            f"{meter_unique_id(meter)}{id_suffix}",
             meter.account.name,
             meter.account.tenancy,
         )

@@ -35,3 +35,13 @@ update_value:
       default: true
       selector:
         boolean:
+send_linked:
+  name: Send linked readings
+  description: Send readings of the linked source sensors, one request per meter.
+  fields:
+    throws:
+      name: Throws
+      description: Raise an error if the readings were not accepted
+      default: true
+      selector:
+        boolean:

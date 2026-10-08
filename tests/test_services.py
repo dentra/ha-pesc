@@ -183,6 +183,13 @@ async def test_values_single_meter_results(
             ]
         },
         {"entity_id": [DAY_A, NIGHT_A], "value": [{"scale_id": 9, "value": 1}]},
+        {
+            "entity_id": [DAY_A, NIGHT_A],
+            "value": [
+                {"scale_id": 2, "value": 12346},
+                {"scale_id": 2, "value": 12347},
+            ],
+        },
     ],
     ids=[
         "value_and_values",
@@ -192,6 +199,7 @@ async def test_values_single_meter_results(
         "rate",
         "duplicate",
         "unknown_scale",
+        "duplicate_scale",
     ],
 )
 async def test_values_invalid_call(hass: HomeAssistant, data: dict) -> None:

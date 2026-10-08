@@ -285,6 +285,33 @@ async def test_rate_restored(
     assert rate.attributes["friendly_name"] != "old"
 
 
+async def test_rate_restored_without_subservices(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+) -> None:
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(RATE, "6.08", {"date": "2026-10-01T10:00:00+03:00"}),
+                {"native_value": 6.08, "native_unit_of_measurement": "RUB/kWh"},
+            )
+        ],
+    )
+    # подуслуга только в справочнике, а он недоступен
+    meters = load_fixture("meters")
+    meters[0].pop("subservice")
+    aioclient_mock.get(METERS_URL, json=meters)
+    aioclient_mock.get(SUBSERVICES_URL, status=404)
+
+    await _setup(hass, aioclient_mock, config_entry)
+
+    rate = hass.states.get(RATE)
+    assert float(rate.state) == 6.08
+    assert rate.attributes["date"] == "2026-10-01T10:00:00+03:00"
+
+
 async def test_rate_not_restored_over_fresh(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,

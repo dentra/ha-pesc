@@ -491,7 +491,11 @@ class PescApi:
         return None
 
     def tariffs_loaded(self, ind: MeterInd) -> bool:
-        return ind.account.id in self._data.tariffs
+        # без подуслуги тариф счётчика не найти
+        return (
+            ind.account.id in self._data.tariffs
+            and self.subservice(ind.meter.subservice_id) is not None
+        )
 
     def find_ind(self, ind_id: str) -> Optional[MeterInd]:
         for ind in self.meters:

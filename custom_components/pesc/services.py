@@ -104,8 +104,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
 def _response(results: list[dict], service_call: ServiceCall) -> ServiceResponse:
     failed = failed_results(results)
     throws = service_call.data["throws"]
-    for result in failed if not throws else []:
-        _LOGGER.warning("Показания не переданы: %s", result["message"])
+    if not throws:
+        for result in failed:
+            _LOGGER.warning("Показания не переданы: %s", result["message"])
     if failed and throws and not service_call.return_response:
         raise HomeAssistantError(failure_message(failed))
     if not service_call.return_response:
@@ -293,9 +294,9 @@ async def _target_readings(hass: HomeAssistant, service_call: ServiceCall) -> _R
     by_scale = {entity.meter.scale_id: entity for entity in entities}
     readings: _Readings = []
     for val in values:
-        if (entity := by_scale.get(val[const.CONF_SCALE_ID])) is None:
+        if (entity := by_scale.pop(val[const.CONF_SCALE_ID], None)) is None:
             raise ServiceValidationError(
-                f"Нет цели для scale_id {val[const.CONF_SCALE_ID]}"
+                f"Нет цели для scale_id {val[const.CONF_SCALE_ID]} или он указан несколько раз"
             )
         readings.append((entity, val[const.CONF_VALUE]))
     return readings

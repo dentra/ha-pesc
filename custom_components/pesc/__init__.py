@@ -7,6 +7,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from . import const, pesc_client
+from .bill import PescBillView
 from .coordinator import PescDataUpdateCoordinator
 from .services import async_setup_services
 
@@ -21,6 +22,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(const.DOMAIN)
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration."""
     async_setup_services(hass)
+    hass.http.register_view(PescBillView())
     return True
 
 

@@ -1,7 +1,9 @@
 import json as jsonmod
 import logging
+import re
 from enum import StrEnum
 from typing import Any, Final, List, NoReturn, Optional, TypedDict
+from urllib.parse import quote
 
 import aiohttp
 from homeassistant import exceptions
@@ -164,6 +166,15 @@ class Subservice(TypedDict):
     type: str
     """ sample: "BASIC_WITH_VARIABLE_PRICE" """
     utility: SubserviceUtility
+
+
+class Bill(TypedDict):
+    id: str
+    accountId: int
+    amount: float
+    timestamp: str
+    """ sample: "01.09.2026 00:00:00" """
+    canDownload: bool
 
 
 class UserAuth(TypedDict):
@@ -526,6 +537,29 @@ class PescClient:
 
     async def async_details(self, account_id: int):
         return await self._async_get(f"/v7/accounts/{account_id}/details")
+
+    async def async_current_bill(self, account_id: int) -> Bill:
+        return await self._async_get(
+            f"/v8/accounts/{account_id}/payments/bills/current"
+        )
+
+    async def async_bill_file(self, account_id: int, bill_id: str) -> bytes:
+        """PDF квитанции."""
+        result = await self._async_get_raw(
+            f"/v7/accounts/{account_id}/payments/bills/{quote(bill_id, safe='')}/uuid"
+        )
+        if result.status != 200:
+            await self._async_response_json(result)
+        # uuid приходит голой строкой при типе application/json
+        uuid = (await result.text()).strip().strip('"')
+        if not re.fullmatch(r"[0-9a-fA-F-]+", uuid):
+            raise ClientError(
+                result.request_info, message="Квитанция недоступна для скачивания"
+            )
+        result = await self._async_get_raw(f"/v1/file/{uuid}")
+        if result.status != 200:
+            await self._async_response_json(result)
+        return await result.read()
 
 
 class ClientError(exceptions.HomeAssistantError):

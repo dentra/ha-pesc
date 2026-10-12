@@ -41,7 +41,8 @@ def _button(hass: HomeAssistant) -> str | None:
         (
             entry.entity_id
             for entry in er.async_get(hass).entities.values()
-            if entry.platform == const.DOMAIN and entry.domain == "button"
+            if entry.platform == const.DOMAIN
+            and entry.translation_key == const.SERVICE_SEND_LINKED
         ),
         None,
     )

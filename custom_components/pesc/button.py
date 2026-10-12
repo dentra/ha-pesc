@@ -10,6 +10,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import const
+from .bill import async_notify_bill
 from .coordinator import PescDataUpdateCoordinator
 from .sensor import meter_unique_id, sensor_entity_id
 from .services import async_send_linked, failed_results, failure_message
@@ -33,10 +34,21 @@ async def async_setup_entry(
         if account := accounts.get(key):
             linked[account.id] = account
 
-    buttons = [PescSendLinkedButton(entry, account.id) for account in linked.values()]
+    buttons: list[ButtonEntity] = [
+        PescSendLinkedButton(entry, account.id) for account in linked.values()
+    ]
+    bill_accounts = {account.id for account in accounts.values()}
+    buttons.extend(
+        PescBillButton(coordinator, account_id) for account_id in bill_accounts
+    )
     unique_ids = {button.unique_id for button in buttons}
     for reg in er.async_entries_for_config_entry(registry, entry.entry_id):
-        if reg.domain == "button" and reg.unique_id not in unique_ids:
+        # квитанцию не трогаем: счёт мог временно прийти без счётчиков
+        if (
+            reg.domain == "button"
+            and reg.unique_id.endswith(f"_{const.SERVICE_SEND_LINKED}")
+            and reg.unique_id not in unique_ids
+        ):
             registry.async_remove(reg.entity_id)
 
     async_add_entities(buttons)
@@ -61,3 +73,20 @@ class PescSendLinkedButton(ButtonEntity):
         results = await async_send_linked(self.hass, self._entry_id, self._account_id)
         if failed := failed_results(results):
             raise HomeAssistantError(failure_message(failed))
+
+
+class PescBillButton(ButtonEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "bill"
+    _attr_icon = "mdi:file-document-outline"
+
+    def __init__(self, coordinator: PescDataUpdateCoordinator, account_id: int) -> None:
+        self._coordinator = coordinator
+        self._account_id = account_id
+        self._attr_unique_id = f"{const.DOMAIN}_{account_id}_bill"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(const.DOMAIN, coordinator.config_entry.entry_id, account_id)}
+        )
+
+    async def async_press(self) -> None:
+        await async_notify_bill(self.hass, self._coordinator, self._account_id)

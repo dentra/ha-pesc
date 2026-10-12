@@ -139,6 +139,9 @@
     "button": {
       "send_linked": {
         "name": "Send readings"
+      },
+      "bill": {
+        "name": "Bill"
       }
     }
   }
